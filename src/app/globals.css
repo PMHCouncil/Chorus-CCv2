@@ -1,26 +1,184 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * PMHC Internal Apps Design System v1.0
+ * Pop colour for this app: Minty Teal
+ */
 
 @theme inline {
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 8px;
+
+  --font-sans: var(--font-montserrat), "Montserrat", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", "SF Mono", Consolas, monospace;
+
+  /* Shadcn semantic tokens mapped to PMHC palette */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* PMHC palette as utility colours */
+  --color-brand-blue: #1461ae;
+  --color-brand-blue-dark: #0e4a85;
+  --color-steel: #36424e;
+
+  --color-zingy-green: #88ac2e;
+  --color-sunny-yellow: #fdb813;
+  --color-lovely-pink: #f47e71;
+  --color-minty-teal: #3fbc9d;
+  --color-plenty-purple: #9473a0;
+  --color-tangy-orange: #f47c4d;
+
+  --color-zingy-green-aa: #5a7220;
+  --color-sunny-yellow-aa: #8a6500;
+  --color-lovely-pink-aa: #b73c2f;
+  --color-minty-teal-aa: #1f7e66;
+  --color-plenty-purple-aa: #6b4e78;
+  --color-tangy-orange-aa: #b5430f;
+
+  --color-canvas: #ffffff;
+  --color-surface-raised: #f7f9fc;
+  --color-surface-sunken: #eef2f7;
+  --color-surface-muted: #e2e8f0;
+
+  --color-text-primary: #36424e;
+  --color-text-secondary: #5a6b7a;
+  --color-text-muted: #8a98a6;
+
+  --color-border-subtle: #e2e8f0;
+  --color-border-default: #cbd5e1;
+  --color-border-strong: #94a3b8;
+
+  --color-success: #1f7e66;
+  --color-success-subtle: #e6f4f0;
+  --color-warning: #8a6500;
+  --color-warning-subtle: #fef6e0;
+  --color-danger: #b73c2f;
+  --color-danger-subtle: #fce8e5;
+  --color-info: #1461ae;
+  --color-info-subtle: #e3edf8;
+
+  --shadow-sm: 0 1px 2px 0 rgba(54, 66, 78, 0.05);
+  --shadow-md:
+    0 2px 8px -2px rgba(54, 66, 78, 0.1),
+    0 1px 2px 0 rgba(54, 66, 78, 0.06);
+  --shadow-lg:
+    0 8px 24px -4px rgba(54, 66, 78, 0.12),
+    0 2px 6px -2px rgba(54, 66, 78, 0.08);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  --radius: 6px;
+
+  --background: #ffffff;
+  --foreground: #36424e;
+  --card: #ffffff;
+  --card-foreground: #36424e;
+  --popover: #ffffff;
+  --popover-foreground: #36424e;
+
+  --primary: #1461ae;
+  --primary-foreground: #ffffff;
+
+  --secondary: #eef2f7;
+  --secondary-foreground: #36424e;
+
+  --muted: #f7f9fc;
+  --muted-foreground: #5a6b7a;
+
+  --accent: #e3edf8;
+  --accent-foreground: #1461ae;
+
+  --destructive: #b73c2f;
+  --destructive-foreground: #ffffff;
+
+  --border: #e2e8f0;
+  --input: #cbd5e1;
+  --ring: #1461ae;
+
+  --sidebar: #36424e;
+  --sidebar-foreground: #f7f9fc;
+  --sidebar-primary: #1461ae;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #2c3640;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #2c3640;
+  --sidebar-ring: #1461ae;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  html {
+    font-family: var(--font-sans);
+  }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01", "cv11";
+  }
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
+  }
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(20, 97, 174, 0.35);
+    border-radius: 4px;
+  }
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+  table thead th {
+    background-color: #1461ae;
+    color: #ffffff;
+    font-weight: 600;
+  }
+  table tbody tr:nth-child(even) td {
+    background-color: rgba(63, 188, 157, 0.06);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
