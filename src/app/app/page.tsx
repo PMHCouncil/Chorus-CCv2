@@ -20,6 +20,7 @@ import { useAuth, isAdminOnly } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { useStaffMembers, STATUS_LABELS, type SubmissionStatus } from "@/lib/submissions";
 import { YourWork } from "@/components/dashboard/your-work";
+import { PipelineCard } from "@/components/dashboard/pipeline-card";
 
 function useDashboardStats() {
   return useQuery({
@@ -169,6 +170,8 @@ export default function Dashboard() {
       </div>
 
       {user && !isAdminOnly(roles) && <YourWork userId={user.id} roles={roles} />}
+
+      {!isAdminOnly(roles) && <PipelineCard />}
 
       <div className="grid sm:grid-cols-3 gap-4">
         {stats.map((s) => (

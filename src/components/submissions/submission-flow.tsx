@@ -1,5 +1,6 @@
 "use client";
 
+import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import {
   Tooltip,
@@ -13,7 +14,6 @@ import type { ResponseStatus } from "@/lib/responses";
 export type FlowStep =
   | "new"
   | "classified"
-  | "themed"
   | "draft"
   | "hr_reviewed"
   | "exec_approved"
@@ -26,18 +26,20 @@ interface StepDef {
 }
 
 const STEPS: StepDef[] = [
-  { key: "new", label: "New", short: "New" },
+  { key: "new", label: "Logged", short: "Logged" },
   { key: "classified", label: "Classified", short: "Clsf" },
-  { key: "themed", label: "Themed", short: "Theme" },
-  { key: "draft", label: "Draft", short: "Draft" },
+  { key: "draft", label: "Drafted", short: "Draft" },
   { key: "hr_reviewed", label: "HR reviewed", short: "HR" },
   { key: "exec_approved", label: "Exec approved", short: "Exec" },
   { key: "sent", label: "Sent", short: "Sent" },
 ];
 
-// Maps the current submission + response status onto the single 7-step
-// pipeline. The response status, when present, always wins because once a
-// response exists the submission has progressed past the intake stages.
+export type FlowTimestamps = Partial<Record<FlowStep, string>>;
+
+// Maps the submission + response status onto the 6-step pipeline. The
+// classified and themed submission states collapse into one user-facing
+// "Classified" step (the AI does both in the same pass). Response status,
+// when present, always wins.
 export function resolveCurrentStep(
   submissionStatus: SubmissionStatus | null | undefined,
   responseStatus: ResponseStatus | null | undefined,
@@ -45,8 +47,9 @@ export function resolveCurrentStep(
   if (responseStatus) return responseStatus;
   if (submissionStatus === "responded") return "exec_approved";
   if (submissionStatus === "sent") return "sent";
-  if (submissionStatus === "themed") return "themed";
-  if (submissionStatus === "classified") return "classified";
+  if (submissionStatus === "themed" || submissionStatus === "classified") {
+    return "classified";
+  }
   return "new";
 }
 
@@ -58,6 +61,10 @@ interface Props {
   submissionStatus?: SubmissionStatus | null;
   responseStatus?: ResponseStatus | null;
   variant?: "compact" | "full";
+  /** Shown under the current step in the `full` variant. */
+  currentOwnerLabel?: string | null;
+  /** Completion timestamps surfaced in the per-step tooltip. */
+  timestamps?: FlowTimestamps;
   className?: string;
 }
 
@@ -65,6 +72,8 @@ export function SubmissionFlow({
   submissionStatus,
   responseStatus,
   variant = "compact",
+  currentOwnerLabel,
+  timestamps,
   className,
 }: Props) {
   const current = resolveCurrentStep(submissionStatus, responseStatus);
@@ -73,7 +82,7 @@ export function SubmissionFlow({
   return (
     <TooltipProvider delayDuration={150}>
       <div
-        className={cn("flex items-center", className)}
+        className={cn("flex items-start", className)}
         role="list"
         aria-label="Submission progress"
       >
@@ -88,13 +97,14 @@ export function SubmissionFlow({
                 : TONE_PENDING;
           const connectorTone =
             i < currentIdx ? "bg-emerald-500" : "bg-border";
+          const ts = timestamps?.[step.key];
 
           return (
             <div
               key={step.key}
               role="listitem"
               aria-current={state === "current" ? "step" : undefined}
-              className="flex items-center"
+              className="flex items-start"
             >
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -107,35 +117,53 @@ export function SubmissionFlow({
                       )}
                     />
                     {variant === "full" && (
-                      <span
-                        className={cn(
-                          "text-[10px] leading-none",
-                          state === "current"
-                            ? "text-foreground font-medium"
-                            : "text-muted-foreground",
+                      <>
+                        <span
+                          className={cn(
+                            "text-[10px] leading-none",
+                            state === "current"
+                              ? "text-foreground font-medium"
+                              : "text-muted-foreground",
+                          )}
+                        >
+                          {step.short}
+                        </span>
+                        {state === "current" && currentOwnerLabel && (
+                          <span className="text-[10px] leading-none text-primary font-medium max-w-[80px] text-center truncate">
+                            {currentOwnerLabel}
+                          </span>
                         )}
-                      >
-                        {step.short}
-                      </span>
+                      </>
                     )}
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="top">
-                  <span className="text-xs">
-                    {step.label}
-                    {state === "current" && " — current"}
-                    {state === "done" && " — done"}
-                  </span>
+                  <div className="text-xs">
+                    <div>
+                      {step.label}
+                      {state === "current" && " — current"}
+                      {state === "done" && " — done"}
+                    </div>
+                    {ts && (
+                      <div className="text-muted-foreground mt-0.5">
+                        {format(new Date(ts), "d MMM yyyy, h:mma")}
+                      </div>
+                    )}
+                    {state === "current" && currentOwnerLabel && (
+                      <div className="text-muted-foreground mt-0.5">
+                        With: {currentOwnerLabel}
+                      </div>
+                    )}
+                  </div>
                 </TooltipContent>
               </Tooltip>
               {i < STEPS.length - 1 && (
                 <span
                   className={cn(
-                    "h-px transition-colors",
+                    "h-px mt-1 transition-colors",
                     variant === "compact" ? "w-3" : "w-6",
                     connectorTone,
                   )}
-                  // visually decorative; tooltips carry the meaning
                   aria-hidden="true"
                 />
               )}
