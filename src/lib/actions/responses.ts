@@ -58,10 +58,13 @@ export async function draftResponse(input: { submissionId: string }) {
   const systemPrompt =
     (settingsMap.responder_system_prompt as string | undefined)?.trim() ||
     DEFAULT_RESPONDER_PROMPT;
+  const DEFAULT_MODEL = "claude-sonnet-4-6";
+  const configuredModel =
+    (settingsMap.classifier_model as string | undefined) || process.env.ANTHROPIC_MODEL;
   const model =
-    (settingsMap.classifier_model as string | undefined) ||
-    process.env.ANTHROPIC_MODEL ||
-    "claude-sonnet-4-6";
+    configuredModel && /^claude-/.test(configuredModel.replace(/^anthropic\//, ""))
+      ? configuredModel
+      : DEFAULT_MODEL;
 
   const joinList = (xs: string[] | null | undefined) =>
     xs && xs.length > 0 ? xs.join(", ") : null;

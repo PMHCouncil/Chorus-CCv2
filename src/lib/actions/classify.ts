@@ -84,10 +84,17 @@ export async function classifySubmission(input: { submissionId: string }) {
 
   const settingsMap = Object.fromEntries((settings ?? []).map((r) => [r.key, r.value]));
   const baseSystemPrompt = (settingsMap.classifier_system_prompt as string | undefined) ?? "";
+  const DEFAULT_MODEL = "claude-sonnet-4-6";
+  const configuredModel =
+    (settingsMap.classifier_model as string | undefined) || process.env.ANTHROPIC_MODEL;
+  // Anthropic API only accepts claude-* models. Older seed data (and a stale
+  // ANTHROPIC_MODEL env var) can leave a non-Anthropic id here, in which
+  // case the request would 4xx and the action would throw an opaque
+  // "Server Components render" error in production.
   const model =
-    (settingsMap.classifier_model as string | undefined) ||
-    process.env.ANTHROPIC_MODEL ||
-    "claude-sonnet-4-6";
+    configuredModel && /^claude-/.test(configuredModel.replace(/^anthropic\//, ""))
+      ? configuredModel
+      : DEFAULT_MODEL;
 
   const missingSenderFields = isAnonymous
     ? []
