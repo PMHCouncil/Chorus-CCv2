@@ -148,6 +148,13 @@ export default function UsersPage() {
 
       <SettingsTabs />
 
+      {usersQ.data?.debug && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm">
+          <p className="font-semibold mb-1">listUsers debug</p>
+          <pre className="whitespace-pre-wrap text-xs">{usersQ.data.debug}</pre>
+        </div>
+      )}
+
       <div className="rounded-lg border bg-card p-4 space-y-4">
         <div className="grid gap-3 sm:grid-cols-3">
           <Input

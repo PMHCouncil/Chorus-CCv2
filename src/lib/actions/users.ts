@@ -43,61 +43,80 @@ async function logAudit(
   });
 }
 
-export async function listUsers(): Promise<{ users: ManagedUser[] }> {
-  const { supabaseAdmin } = await requireAdmin();
+export async function listUsers(): Promise<{
+  users: ManagedUser[];
+  debug?: string;
+}> {
+  try {
+    const { supabaseAdmin } = await requireAdmin();
 
-  const all: Array<{
-    id: string;
-    email?: string;
-    created_at: string;
-    last_sign_in_at?: string | null;
-    invited_at?: string | null;
-    email_confirmed_at?: string | null;
-    user_metadata?: { display_name?: string };
-    banned_until?: string | null;
-  }> = [];
-  let page = 1;
-  const perPage = 200;
-  while (true) {
-    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
-    if (error) throw new Error(error.message);
-    all.push(...(data.users as typeof all));
-    if (data.users.length < perPage) break;
-    page += 1;
-    if (page > 25) break;
+    const all: Array<{
+      id: string;
+      email?: string;
+      created_at: string;
+      last_sign_in_at?: string | null;
+      invited_at?: string | null;
+      email_confirmed_at?: string | null;
+      user_metadata?: { display_name?: string };
+      banned_until?: string | null;
+    }> = [];
+    let page = 1;
+    const perPage = 200;
+    while (true) {
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+        page,
+        perPage,
+      });
+      if (error)
+        throw new Error(`auth.admin.listUsers failed: ${error.message}`);
+      all.push(...(data.users as typeof all));
+      if (data.users.length < perPage) break;
+      page += 1;
+      if (page > 25) break;
+    }
+
+    const ids = all.map((u) => u.id);
+    const [profilesRes, rolesRes] = await Promise.all([
+      supabaseAdmin.from("profiles").select("id, display_name, email").in("id", ids),
+      supabaseAdmin.from("user_roles").select("user_id, role").in("user_id", ids),
+    ]);
+    if (profilesRes.error)
+      throw new Error(`profiles query failed: ${profilesRes.error.message}`);
+    if (rolesRes.error)
+      throw new Error(`user_roles query failed: ${rolesRes.error.message}`);
+
+    const profileMap = new Map((profilesRes.data ?? []).map((p) => [p.id, p]));
+    const roleMap = new Map<string, AppRole[]>();
+    for (const r of rolesRes.data ?? []) {
+      const arr = roleMap.get(r.user_id) ?? [];
+      arr.push(r.role as AppRole);
+      roleMap.set(r.user_id, arr);
+    }
+
+    const users: ManagedUser[] = all.map((u) => ({
+      id: u.id,
+      email: u.email ?? profileMap.get(u.id)?.email ?? "",
+      display_name:
+        profileMap.get(u.id)?.display_name ?? u.user_metadata?.display_name ?? null,
+      roles: roleMap.get(u.id) ?? [],
+      created_at: u.created_at,
+      last_sign_in_at: u.last_sign_in_at ?? null,
+      banned_until: u.banned_until ?? null,
+      invited_at: u.invited_at ?? null,
+      email_confirmed_at: u.email_confirmed_at ?? null,
+    }));
+
+    users.sort((a, b) => (a.email > b.email ? 1 : -1));
+    return { users };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const hasUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const hasKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const keyLen = process.env.SUPABASE_SERVICE_ROLE_KEY?.length ?? 0;
+    const debug = `${msg} | env: url=${hasUrl} key=${hasKey} keyLen=${keyLen}`;
+    console.error("[listUsers] failed:", debug);
+    return { users: [], debug };
   }
-
-  const ids = all.map((u) => u.id);
-  const [profilesRes, rolesRes] = await Promise.all([
-    supabaseAdmin.from("profiles").select("id, display_name, email").in("id", ids),
-    supabaseAdmin.from("user_roles").select("user_id, role").in("user_id", ids),
-  ]);
-  if (profilesRes.error) throw new Error(profilesRes.error.message);
-  if (rolesRes.error) throw new Error(rolesRes.error.message);
-
-  const profileMap = new Map((profilesRes.data ?? []).map((p) => [p.id, p]));
-  const roleMap = new Map<string, AppRole[]>();
-  for (const r of rolesRes.data ?? []) {
-    const arr = roleMap.get(r.user_id) ?? [];
-    arr.push(r.role as AppRole);
-    roleMap.set(r.user_id, arr);
-  }
-
-  const users: ManagedUser[] = all.map((u) => ({
-    id: u.id,
-    email: u.email ?? profileMap.get(u.id)?.email ?? "",
-    display_name:
-      profileMap.get(u.id)?.display_name ?? u.user_metadata?.display_name ?? null,
-    roles: roleMap.get(u.id) ?? [],
-    created_at: u.created_at,
-    last_sign_in_at: u.last_sign_in_at ?? null,
-    banned_until: u.banned_until ?? null,
-    invited_at: u.invited_at ?? null,
-    email_confirmed_at: u.email_confirmed_at ?? null,
-  }));
-
-  users.sort((a, b) => (a.email > b.email ? 1 : -1));
-  return { users };
 }
 
 const CreateUserSchema = z.object({
