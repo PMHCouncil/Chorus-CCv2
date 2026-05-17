@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Inbox as InboxIcon, MailCheck, Search } from "lucide-react";
 import { SubmissionDetailSheet } from "@/components/submissions/submission-detail-sheet";
+import { SubmissionFlow } from "@/components/submissions/submission-flow";
 import { cn } from "@/lib/utils";
 
 const STATUS_TONE: Record<ResponseStatus, string> = {
@@ -160,6 +161,7 @@ export default function ResponsesPage() {
                   {format(new Date(r.created_at), "d MMM, h:mma")}
                 </span>
               </div>
+              <SubmissionFlow responseStatus={r.status} />
               <p className="text-sm text-muted-foreground line-clamp-2">{r.draft_text}</p>
               {r.change_made && (
                 <span className="text-[11px] text-muted-foreground">Edited from AI draft</span>
