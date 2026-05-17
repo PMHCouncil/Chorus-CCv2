@@ -8,6 +8,12 @@ applications:
             - npm ci --no-audit --no-fund
         build:
           commands:
+            # Amplify exposes console env vars to the build shell but not to the
+            # Next.js SSR Lambda at runtime. Persist server-only vars into
+            # .env.production so Next.js bakes/loads them. NEXT_PUBLIC_* vars
+            # are inlined at build and don't strictly need this, but we write
+            # them too for consistency.
+            - env | grep -E '^(SUPABASE_SERVICE_ROLE_KEY|ANTHROPIC_API_KEY|NEXT_PUBLIC_SUPABASE_URL|NEXT_PUBLIC_SUPABASE_ANON_KEY|NEXT_PUBLIC_SITE_URL)=' >> .env.production || true
             - npm run build
       artifacts:
         baseDirectory: .next
