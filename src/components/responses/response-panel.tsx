@@ -12,6 +12,7 @@ import {
   RESPONSE_STATUS_LABELS,
   useApproveResponse,
   useDraftResponse,
+  useFlowTimestamps,
   useMarkResponseSent,
   useReopenResponse,
   useResponseForSubmission,
@@ -21,6 +22,15 @@ import {
 } from "@/lib/responses";
 import { hasAnyRole, useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { SubmissionFlow } from "@/components/submissions/submission-flow";
+
+function ownerLabelFor(status: ResponseStatus | null | undefined): string | null {
+  if (!status) return "HR";
+  if (status === "draft") return "HR";
+  if (status === "hr_reviewed") return "Exec";
+  if (status === "exec_approved") return "HR — send";
+  return null;
+}
 
 const STATUS_TONE: Record<ResponseStatus, string> = {
   draft: "bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/30",
@@ -45,6 +55,7 @@ export function ResponsePanel({ submissionId }: Props) {
   const canSend = hasAnyRole(roles, ["admin", "hr"]);
 
   const { data: response, isLoading } = useResponseForSubmission(submissionId);
+  const { data: stepTimestamps } = useFlowTimestamps(submissionId, response?.id ?? null);
   const draft = useDraftResponse();
   const update = useUpdateResponseDraft();
   const review = useReviewResponse();
@@ -168,6 +179,15 @@ export function ResponsePanel({ submissionId }: Props) {
             </Button>
           )}
         </div>
+      </div>
+
+      <div className="rounded-md border bg-muted/30 px-3 py-3">
+        <SubmissionFlow
+          variant="full"
+          responseStatus={response?.status ?? null}
+          currentOwnerLabel={ownerLabelFor(response?.status ?? null)}
+          timestamps={stepTimestamps}
+        />
       </div>
 
       {isLoading ? (
