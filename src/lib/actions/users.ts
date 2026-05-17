@@ -100,28 +100,39 @@ export async function listUsers(): Promise<{ users: ManagedUser[] }> {
   return { users };
 }
 
-const InviteSchema = z.object({
+const CreateUserSchema = z.object({
   email: z.string().trim().email().max(255),
   display_name: z.string().trim().min(1).max(120),
   role: z.enum(ROLE_VALUES),
+  password: z.string().min(8).max(128),
   notes: z.string().max(1000).optional(),
-  redirect_to: z.string().url().optional(),
 });
 
-export async function inviteUser(input: z.input<typeof InviteSchema>) {
-  const data = InviteSchema.parse(input);
+/**
+ * Create a user account directly (no email invite sent).
+ *
+ * Designed for the SSO-with-admin-provisioning model: admin pre-creates the
+ * account with a temp password and shares it manually. The user can sign in
+ * via email/password immediately, and once Microsoft SSO is wired up,
+ * signing in with the same email auto-links the OAuth identity to this
+ * existing user (Supabase matches by confirmed email). No SMTP required.
+ *
+ * `email_confirm: true` so the user is "confirmed" from creation — required
+ * for the email-match identity-linking flow to work later.
+ */
+export async function inviteUser(input: z.input<typeof CreateUserSchema>) {
+  const data = CreateUserSchema.parse(input);
   const { supabaseAdmin, userId } = await requireAdmin();
 
-  const { data: invited, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-    data.email,
-    {
-      data: { display_name: data.display_name },
-      redirectTo: data.redirect_to,
-    },
-  );
+  const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
+    email: data.email,
+    password: data.password,
+    email_confirm: true,
+    user_metadata: { display_name: data.display_name },
+  });
   if (error) throw new Error(error.message);
-  const newId = invited.user?.id;
-  if (!newId) throw new Error("Invite returned no user id");
+  const newId = created.user?.id;
+  if (!newId) throw new Error("createUser returned no user id");
 
   await supabaseAdmin
     .from("profiles")
@@ -135,7 +146,7 @@ export async function inviteUser(input: z.input<typeof InviteSchema>) {
     .insert({ user_id: newId, role: data.role });
   if (roleErr && !/duplicate/i.test(roleErr.message)) throw new Error(roleErr.message);
 
-  await logAudit(supabaseAdmin, userId, "user_invited", newId, {
+  await logAudit(supabaseAdmin, userId, "user_created", newId, {
     email: data.email,
     role: data.role,
     notes: data.notes ?? null,

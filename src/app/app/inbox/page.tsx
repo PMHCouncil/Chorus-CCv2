@@ -72,6 +72,7 @@ import {
   PRINCIPLE_TAG_OPTIONS,
 } from "@/lib/classify";
 import { useAuth, hasAnyRole } from "@/lib/auth";
+import { applyRedactions, useExecRedactions } from "@/lib/decisions";
 
 export default function InboxPage() {
   const searchParamsObj = useSearchParams();
@@ -114,6 +115,12 @@ export default function InboxPage() {
 
   const { data: staff = [] } = useStaffMembers();
   const staffById = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
+
+  const { data: redactions } = useExecRedactions();
+  const redactionKeywords = useMemo(
+    () => (redactions ?? []).map((r) => r.redacted_keyword),
+    [redactions],
+  );
 
   const bulkAssign = useBulkAssign();
   const bulkArchive = useBulkArchive();
@@ -510,14 +517,20 @@ export default function InboxPage() {
                     </TableCell>
                     <TableCell className="text-sm">
                       <div className="font-medium text-foreground">
-                        {s.submitter_name ?? "Anonymous"}
+                        {s.submitter_name
+                          ? applyRedactions(s.submitter_name, redactionKeywords)
+                          : "Anonymous"}
                       </div>
                       {s.submitter_email && (
-                        <div className="text-xs text-muted-foreground">{s.submitter_email}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {applyRedactions(s.submitter_email, redactionKeywords)}
+                        </div>
                       )}
                     </TableCell>
                     <TableCell className="max-w-md">
-                      <p className="line-clamp-2 text-sm text-muted-foreground">{s.content}</p>
+                      <p className="line-clamp-2 text-sm text-muted-foreground">
+                        {applyRedactions(s.content, redactionKeywords)}
+                      </p>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {assignedTo
@@ -557,7 +570,10 @@ export default function InboxPage() {
           <ul className="space-y-3">
             {rows.map((s) => (
               <li key={s.id}>
-                <MobileSubmissionCard submission={s} />
+                <MobileSubmissionCard
+                  submission={s}
+                  redactionKeywords={redactionKeywords}
+                />
               </li>
             ))}
           </ul>
@@ -585,7 +601,13 @@ function EmptyState({ canIngest }: { canIngest: boolean }) {
   );
 }
 
-function MobileSubmissionCard({ submission: s }: { submission: Submission }) {
+function MobileSubmissionCard({
+  submission: s,
+  redactionKeywords,
+}: {
+  submission: Submission;
+  redactionKeywords: string[];
+}) {
   const router = useRouter();
   return (
     <button
@@ -596,7 +618,9 @@ function MobileSubmissionCard({ submission: s }: { submission: Submission }) {
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="font-medium text-sm text-foreground truncate">
-            {s.submitter_name ?? "Anonymous"}
+            {s.submitter_name
+              ? applyRedactions(s.submitter_name, redactionKeywords)
+              : "Anonymous"}
           </div>
           <div className="text-[11px] text-muted-foreground mt-0.5">
             {format(new Date(s.submitted_at), "d MMM, h:mm a")}
@@ -609,7 +633,9 @@ function MobileSubmissionCard({ submission: s }: { submission: Submission }) {
           <Badge className="text-[10px]">{STATUS_LABELS[s.status]}</Badge>
         </div>
       </div>
-      <p className="line-clamp-1 text-sm text-muted-foreground mt-2">{s.content}</p>
+      <p className="line-clamp-1 text-sm text-muted-foreground mt-2">
+        {applyRedactions(s.content, redactionKeywords)}
+      </p>
     </button>
   );
 }

@@ -117,9 +117,17 @@ export function useExecRedactions() {
   return useQuery({
     queryKey: ["exec_redactions"],
     queryFn: async () => {
+      // Redactions are per-user (each viewer maintains their own masking
+      // list). Always scope the query to the current auth user so we never
+      // accidentally show another viewer's keywords — defence in depth
+      // alongside the RLS policy.
+      const { data: userRes } = await supabase.auth.getUser();
+      const uid = userRes.user?.id;
+      if (!uid) return [];
       const { data, error } = await supabase
         .from("exec_redactions")
         .select("*")
+        .eq("user_id", uid)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as ExecRedaction[];

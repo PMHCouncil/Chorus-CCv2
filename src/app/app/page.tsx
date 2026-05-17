@@ -16,9 +16,10 @@ import {
   YAxis,
 } from "recharts";
 import { format, subDays, startOfDay } from "date-fns";
-import { useAuth } from "@/lib/auth";
+import { useAuth, isAdminOnly } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { useStaffMembers, STATUS_LABELS, type SubmissionStatus } from "@/lib/submissions";
+import { YourWork } from "@/components/dashboard/your-work";
 
 function useDashboardStats() {
   return useQuery({
@@ -166,6 +167,8 @@ export default function Dashboard() {
           {roles.length > 0 && <> · roles: {roles.join(", ")}</>}
         </p>
       </div>
+
+      {user && !isAdminOnly(roles) && <YourWork userId={user.id} roles={roles} />}
 
       <div className="grid sm:grid-cols-3 gap-4">
         {stats.map((s) => (

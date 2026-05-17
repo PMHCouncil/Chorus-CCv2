@@ -57,6 +57,51 @@ export interface ResponseListItem extends ResponseRow {
   } | null;
 }
 
+/**
+ * Per-user "what's on my plate" counts shown on the dashboard. Returns
+ * one number per actionable bucket. Each query is a HEAD count, so the
+ * payload is small. Approval / ready-to-send buckets are global (any
+ * approver / any sender can clear them).
+ */
+export function useMyWorkStats(userId: string | undefined) {
+  return useQuery({
+    queryKey: ["my-work-stats", userId],
+    enabled: !!userId,
+    queryFn: async () => {
+      const [assigned, myDrafts, awaitingApproval, readyToSend] = await Promise.all([
+        supabase
+          .from("submissions")
+          .select("id", { count: "exact", head: true })
+          .eq("assigned_to", userId!)
+          .is("archived_at", null)
+          .neq("status", "sent"),
+        supabase
+          .from("responses")
+          .select("id", { count: "exact", head: true })
+          .eq("reviewer", userId!)
+          .eq("status", "draft"),
+        supabase
+          .from("responses")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "hr_reviewed"),
+        supabase
+          .from("responses")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "exec_approved"),
+      ]);
+      const firstError =
+        assigned.error || myDrafts.error || awaitingApproval.error || readyToSend.error;
+      if (firstError) throw firstError;
+      return {
+        assigned: assigned.count ?? 0,
+        myDrafts: myDrafts.count ?? 0,
+        awaitingApproval: awaitingApproval.count ?? 0,
+        readyToSend: readyToSend.count ?? 0,
+      };
+    },
+  });
+}
+
 export function useResponses(filters: ResponseListFilters = {}) {
   return useQuery({
     queryKey: ["responses", filters],

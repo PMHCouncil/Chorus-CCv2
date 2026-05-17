@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import {
   RESPONSE_STATUS_LABELS,
@@ -27,10 +28,34 @@ const STATUS_TONE: Record<ResponseStatus, string> = {
   sent: "bg-primary/15 text-primary border-primary/30",
 };
 
+const VALID_STATUSES: Array<ResponseStatus | "all"> = [
+  "all",
+  "draft",
+  "hr_reviewed",
+  "exec_approved",
+  "sent",
+];
+
+function isValidStatus(v: string | null): v is ResponseStatus | "all" {
+  return !!v && (VALID_STATUSES as string[]).includes(v);
+}
+
 export default function ResponsesPage() {
-  const [status, setStatus] = useState<ResponseStatus | "all">("all");
+  const searchParams = useSearchParams();
+  const initialStatus = (() => {
+    const v = searchParams.get("status");
+    return isValidStatus(v) ? v : "all";
+  })();
+
+  const [status, setStatus] = useState<ResponseStatus | "all">(initialStatus);
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
+
+  // Re-sync when an external link changes ?status (e.g. dashboard card).
+  useEffect(() => {
+    const v = searchParams.get("status");
+    if (isValidStatus(v)) setStatus(v);
+  }, [searchParams]);
 
   const { data, isLoading } = useResponses({ status, search });
 

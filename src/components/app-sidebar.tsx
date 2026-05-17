@@ -24,6 +24,7 @@ import {
   ShieldCheck,
   Settings,
   BarChart3,
+  EyeOff,
 } from "lucide-react";
 import type { AppRole } from "@/lib/auth";
 
@@ -43,6 +44,7 @@ const NAV: NavItem[] = [
   { title: "Themes", to: "/app/themes", icon: Layers, roles: STAFF },
   { title: "Responses", to: "/app/responses", icon: MessageSquareText, roles: STAFF },
   { title: "Decisions", to: "/app/decisions", icon: Gavel, roles: STAFF },
+  { title: "My redactions", to: "/app/redactions", icon: EyeOff, roles: STAFF },
   { title: "Audit", to: "/app/audit", icon: ScrollText, roles: ["admin", ...STAFF] },
   { title: "Settings", to: "/app/settings", icon: Settings, roles: ["admin"] },
 ];

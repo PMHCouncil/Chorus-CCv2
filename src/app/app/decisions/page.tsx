@@ -22,8 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Gavel, Search, ShieldAlert, History, Plus, X, EyeOff } from "lucide-react";
-import { hasAnyRole, useAuth } from "@/lib/auth";
+import { Gavel, Search, ShieldAlert, History, EyeOff } from "lucide-react";
+import { hasAnyRole, useAuth, type AppRole } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import {
   useThemesWithBreakdown,
@@ -35,22 +35,32 @@ import {
   DECISION_STATUS_OPTIONS,
   DECISION_TONE,
   applyRedactions,
-  useAddRedaction,
   useDecisionHistory,
   useExecRedactions,
   useLatestDecisionsByTheme,
   useRecordDecision,
-  useRemoveRedaction,
   type DecisionStatus,
 } from "@/lib/decisions";
+import { RedactionsManager } from "@/components/redactions/redactions-manager";
 import { ExportMenu } from "@/components/export-menu";
 import { exportCSV, exportPDF, type ExportColumn } from "@/lib/export";
 import { format as fmt } from "date-fns";
 
+const REDACTION_ROLES: AppRole[] = [
+  "hr",
+  "exec",
+  "gm",
+  "gm_ea",
+  "director",
+  "group_manager",
+];
+
 export default function DecisionsPage() {
   const { roles } = useAuth();
   const canDecide = hasAnyRole(roles, ["admin", "exec"]);
-  const canManageRedactions = hasAnyRole(roles, ["admin"]);
+  // Anyone who can read submission content can maintain their own personal
+  // redactions. Admin is intentionally excluded — they don't see content.
+  const canManageRedactions = hasAnyRole(roles, REDACTION_ROLES);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<DecisionStatus | "all" | "undecided">("all");
@@ -160,7 +170,7 @@ export default function DecisionsPage() {
             disabled={filtered.length === 0}
             count={filtered.length}
           />
-          {canManageRedactions && <RedactionsManager keywords={redactions ?? []} />}
+          {canManageRedactions && <RedactionsManagerButton />}
         </div>
       </div>
 
@@ -533,28 +543,8 @@ function DecisionSheet({
   );
 }
 
-function RedactionsManager({
-  keywords,
-}: {
-  keywords: { id: string; redacted_keyword: string }[];
-}) {
+function RedactionsManagerButton() {
   const [open, setOpen] = useState(false);
-  const [value, setValue] = useState("");
-  const add = useAddRedaction();
-  const remove = useRemoveRedaction();
-
-  const handleAdd = async () => {
-    const k = value.trim();
-    if (!k) return;
-    try {
-      await add.mutateAsync(k);
-      setValue("");
-      toast.success("Redaction added");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed");
-    }
-  };
-
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
@@ -563,47 +553,14 @@ function RedactionsManager({
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent className="w-full sm:max-w-md">
           <SheetHeader>
-            <SheetTitle>Executive view redactions</SheetTitle>
+            <SheetTitle>My redactions</SheetTitle>
             <SheetDescription>
-              Keywords listed here are masked in submission text shown on the Decisions
-              page. Use to remove identifying terms before exec review.
+              Keywords listed here are masked in submission content shown to
+              you. They are personal — other reviewers see the unmasked text.
             </SheetDescription>
           </SheetHeader>
-
-          <div className="mt-6 space-y-4">
-            <div className="flex gap-2">
-              <Input
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                placeholder="e.g. a name, a role, a project codename"
-                onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-              />
-              <Button onClick={handleAdd} disabled={add.isPending}>
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <div className="space-y-1.5">
-              {keywords.length === 0 && (
-                <p className="text-sm text-muted-foreground">No keywords yet.</p>
-              )}
-              {keywords.map((k) => (
-                <div
-                  key={k.id}
-                  className="flex items-center justify-between rounded-md border bg-card px-3 py-2"
-                >
-                  <span className="text-sm font-mono">{k.redacted_keyword}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => remove.mutate(k.id)}
-                    disabled={remove.isPending}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
+          <div className="mt-6">
+            <RedactionsManager />
           </div>
         </SheetContent>
       </Sheet>

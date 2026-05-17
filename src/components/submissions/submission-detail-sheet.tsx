@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, type KeyboardEvent } from "react";
+import { useState, useEffect, useMemo, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -51,6 +51,7 @@ import {
   type Sentiment,
 } from "@/lib/classify";
 import { useAuth, hasAnyRole } from "@/lib/auth";
+import { applyRedactions, useExecRedactions } from "@/lib/decisions";
 import { cn } from "@/lib/utils";
 import { ResponsePanel } from "@/components/responses/response-panel";
 
@@ -123,6 +124,11 @@ export function SubmissionDetailBody({ submissionId, layout, onAfterDelete }: Bo
   const { data, isLoading } = useSubmission(submissionId);
   const { data: classification } = useClassification(submissionId);
   const { data: themeLinks } = useSubmissionThemes(submissionId);
+  const { data: redactions } = useExecRedactions();
+  const redactionKeywords = useMemo(
+    () => (redactions ?? []).map((r) => r.redacted_keyword),
+    [redactions],
+  );
   const del = useDeleteSubmission();
   const classify = useClassifySubmission();
   const verify = useVerifyClassification();
@@ -142,6 +148,10 @@ export function SubmissionDetailBody({ submissionId, layout, onAfterDelete }: Bo
     setFeedbackTypes(classification?.feedback_types ?? []);
     setPrincipleTags(classification?.principle_tags ?? []);
     setRolesAffected(classification?.roles_affected ?? []);
+    // Reset local form state only when the classification row changes (or
+    // arrives). Depending on the individual fields would clobber a reviewer's
+    // in-progress edits on every refetch of the same row.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classification?.id]);
 
   const handleDelete = async () => {
@@ -207,7 +217,7 @@ export function SubmissionDetailBody({ submissionId, layout, onAfterDelete }: Bo
         Content
       </h4>
       <div className="mt-2 whitespace-pre-wrap rounded-md border bg-muted/30 p-4 text-sm leading-relaxed">
-        {data.content}
+        {applyRedactions(data.content, redactionKeywords)}
       </div>
     </div>
   );

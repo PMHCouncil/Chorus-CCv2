@@ -2,6 +2,8 @@ import { Suspense } from "react";
 import { ShieldCheck } from "lucide-react";
 import { LoginForm } from "./login-form";
 
+export const dynamic = "force-dynamic";
+
 export default function LoginPage() {
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-background">

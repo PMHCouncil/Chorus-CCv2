@@ -79,10 +79,11 @@ export default function UsersPage() {
       email: string;
       display_name: string;
       role: AppRole;
+      password: string;
       notes?: string;
     }) => inviteUser(input),
     onSuccess: () => {
-      toast.success("Invitation sent");
+      toast.success("User created");
       setInviteOpen(false);
       qc.invalidateQueries({ queryKey: ["managed_users"] });
     },
@@ -142,7 +143,7 @@ export default function UsersPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
           <p className="text-sm text-muted-foreground">User accounts and roles.</p>
         </div>
-        <Button onClick={() => setInviteOpen(true)}>Invite user</Button>
+        <Button onClick={() => setInviteOpen(true)}>Create user</Button>
       </div>
 
       <SettingsTabs />
@@ -175,7 +176,7 @@ export default function UsersPage() {
               <SelectItem value="all">All statuses</SelectItem>
               <SelectItem value="active">Active</SelectItem>
               <SelectItem value="inactive">Deactivated</SelectItem>
-              <SelectItem value="invited">Invited (never signed in)</SelectItem>
+              <SelectItem value="invited">Pending (never signed in)</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -232,7 +233,7 @@ export default function UsersPage() {
                       {isInactive ? (
                         <Badge variant="destructive">Inactive</Badge>
                       ) : isInvited ? (
-                        <Badge variant="outline">Invited</Badge>
+                        <Badge variant="outline">Pending</Badge>
                       ) : (
                         <Badge variant="default">Active</Badge>
                       )}
@@ -310,12 +311,19 @@ function InviteDialog({
 }: {
   open: boolean;
   onClose: () => void;
-  onSubmit: (v: { email: string; display_name: string; role: AppRole; notes?: string }) => void;
+  onSubmit: (v: {
+    email: string;
+    display_name: string;
+    role: AppRole;
+    password: string;
+    notes?: string;
+  }) => void;
   pending: boolean;
 }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState<AppRole>("hr");
+  const [password, setPassword] = useState("");
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
@@ -323,17 +331,22 @@ function InviteDialog({
       setEmail("");
       setName("");
       setRole("hr");
+      setPassword("");
       setNotes("");
     }
   }, [open]);
+
+  const passwordTooShort = password.length > 0 && password.length < 8;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Invite user</DialogTitle>
+          <DialogTitle>Create user</DialogTitle>
           <DialogDescription>
-            They&rsquo;ll receive an email with a magic link to set their password.
+            Sets a temporary password you can share with them. Once Microsoft
+            SSO is enabled, signing in with the same email will link their
+            Microsoft account to this user automatically.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -361,6 +374,25 @@ function InviteDialog({
             </Select>
           </div>
           <div className="space-y-1">
+            <Label>Temporary password</Label>
+            <Input
+              type="text"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Min 8 characters"
+              autoComplete="off"
+            />
+            {passwordTooShort && (
+              <p className="text-xs text-destructive">
+                Must be at least 8 characters.
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Share this with the user out-of-band (in person, Teams, etc.).
+              They&rsquo;ll use it for testing until SSO is wired up.
+            </p>
+          </div>
+          <div className="space-y-1">
             <Label>Notes (optional)</Label>
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
@@ -370,12 +402,18 @@ function InviteDialog({
             Cancel
           </Button>
           <Button
-            disabled={pending || !email || !name}
+            disabled={pending || !email || !name || password.length < 8}
             onClick={() =>
-              onSubmit({ email, display_name: name, role, notes: notes || undefined })
+              onSubmit({
+                email,
+                display_name: name,
+                role,
+                password,
+                notes: notes || undefined,
+              })
             }
           >
-            {pending ? "Sending…" : "Send invite"}
+            {pending ? "Creating…" : "Create user"}
           </Button>
         </DialogFooter>
       </DialogContent>

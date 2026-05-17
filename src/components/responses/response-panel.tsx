@@ -35,8 +35,13 @@ interface Props {
 
 export function ResponsePanel({ submissionId }: Props) {
   const { roles } = useAuth();
-  const canDraft = hasAnyRole(roles, ["admin", "hr"]);
-  const canApprove = hasAnyRole(roles, ["admin", "exec"]);
+  // Mirrors the SECURITY DEFINER helpers on the database:
+  //   is_content_editor   = hr, gm, gm_ea, director   (drafts + reviews)
+  //   is_content_approver = gm, director, exec        (sets exec_approved)
+  // Admin appears in the UI checks too so that admin operators can fix
+  // things if needed (RLS still prevents them seeing content rows).
+  const canDraft = hasAnyRole(roles, ["admin", "hr", "gm", "gm_ea", "director"]);
+  const canApprove = hasAnyRole(roles, ["admin", "gm", "director", "exec"]);
   const canSend = hasAnyRole(roles, ["admin", "hr"]);
 
   const { data: response, isLoading } = useResponseForSubmission(submissionId);
@@ -55,6 +60,10 @@ export function ResponsePanel({ submissionId }: Props) {
     setText(response?.draft_text ?? "");
     setNotes(response?.notes ?? "");
     setChangeMade(response?.change_made ?? false);
+    // Reset local form state only when the response row changes (or arrives).
+    // We intentionally do NOT depend on the individual fields — if the user is
+    // mid-edit, a refetch of the same row should not blow away their changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [response?.id]);
 
   const isLocked = !!response && response.status !== "draft";

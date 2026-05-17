@@ -345,7 +345,7 @@ CREATE POLICY "Admin manage settings" ON public.app_settings
   WITH CHECK (public.has_role(auth.uid(), 'admin'));
 
 INSERT INTO public.app_settings (key, value) VALUES
-('classifier_model', 'google/gemini-2.5-flash'),
+('classifier_model', 'claude-sonnet-4-6'),
 ('classifier_system_prompt', 'You are an analyst supporting Port Macquarie-Hastings Council during a Clause 42 organisational restructure consultation (12 May to 12 June 2026).
 
 Your job: read a single staff feedback submission and classify it.
