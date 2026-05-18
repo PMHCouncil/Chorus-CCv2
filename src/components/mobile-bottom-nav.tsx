@@ -9,9 +9,11 @@ import {
   Gavel,
   ScrollText,
   Settings,
+  HelpCircle,
   type LucideIcon,
 } from "lucide-react";
 import type { AppRole } from "@/lib/auth";
+import { usePspOpenCount } from "@/lib/submissions";
 import { cn } from "@/lib/utils";
 
 type Item = {
@@ -25,6 +27,7 @@ const STAFF: AppRole[] = ["hr", "exec", "gm", "gm_ea", "director", "group_manage
 
 const ITEMS: Item[] = [
   { title: "Inbox", to: "/app/inbox", icon: Inbox, roles: ["hr", "gm", "gm_ea", "director", "group_manager"] },
+  { title: "PSP", to: "/app/psp-queue", icon: HelpCircle, roles: ["hr", "gm", "gm_ea", "director", "group_manager"] },
   { title: "Themes", to: "/app/themes", icon: Layers, roles: STAFF },
   { title: "Responses", to: "/app/responses", icon: MessageSquareText, roles: STAFF },
   { title: "Decisions", to: "/app/decisions", icon: Gavel, roles: STAFF },
@@ -35,6 +38,7 @@ const ITEMS: Item[] = [
 export function MobileBottomNav({ roles }: { roles: AppRole[] }) {
   const pathname = usePathname();
   const visible = ITEMS.filter((i) => i.roles.some((r) => roles.includes(r)));
+  const { data: pspOpenCount = 0 } = usePspOpenCount();
 
   return (
     <nav
@@ -45,6 +49,8 @@ export function MobileBottomNav({ roles }: { roles: AppRole[] }) {
       {visible.map((item) => {
         const isActive = pathname.startsWith(item.to);
         const Icon = item.icon;
+        const showPspBadge =
+          item.to === "/app/psp-queue" && pspOpenCount > 0;
         return (
           <Link
             key={item.to}
@@ -57,7 +63,14 @@ export function MobileBottomNav({ roles }: { roles: AppRole[] }) {
                 : "text-muted-foreground active:bg-muted/40",
             )}
           >
-            <Icon className="h-5 w-5" />
+            <div className="relative">
+              <Icon className="h-5 w-5" />
+              {showPspBadge && (
+                <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-primary text-primary-foreground text-[9px] font-semibold grid place-items-center leading-none">
+                  {pspOpenCount > 99 ? "99+" : pspOpenCount}
+                </span>
+              )}
+            </div>
             <span className="leading-none truncate max-w-full px-1">{item.title}</span>
           </Link>
         );

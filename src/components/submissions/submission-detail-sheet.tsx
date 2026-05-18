@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Trash2, Sparkles, CheckCircle2, ShieldCheck, X, Plus, Wand2, Maximize2 } from "lucide-react";
+import { Trash2, Sparkles, CheckCircle2, ShieldCheck, X, Plus, Wand2, Maximize2, HelpCircle, CornerUpLeft } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -37,6 +37,8 @@ import {
   useUpdateSubmitter,
   useStaffMembers,
   useBulkAssign,
+  useRouteToPsp,
+  useReturnFromPsp,
 } from "@/lib/submissions";
 import {
   useClassification,
@@ -199,6 +201,9 @@ export function SubmissionDetailBody({ submissionId, layout, onAfterDelete }: Bo
     return <div className="text-sm text-muted-foreground">Loading…</div>;
   }
 
+  const pspRouted = !!data.psp_routed_at;
+  const pspCompleted = !!data.psp_completed_at;
+
   const badges = (
     <div className="flex flex-wrap gap-2">
       <Badge variant="secondary">{SOURCE_LABELS[data.source]}</Badge>
@@ -208,8 +213,20 @@ export function SubmissionDetailBody({ submissionId, layout, onAfterDelete }: Bo
           <ShieldCheck className="h-3 w-3" /> Verified
         </Badge>
       )}
+      {pspRouted && !pspCompleted && (
+        <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-700 dark:text-amber-400">
+          <HelpCircle className="h-3 w-3" /> PSP queue
+        </Badge>
+      )}
+      {pspCompleted && (
+        <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-700 dark:text-emerald-400">
+          <CheckCircle2 className="h-3 w-3" /> PSP answered
+        </Badge>
+      )}
     </div>
   );
+
+  const pspBlock = <PspPanel submission={data} canManage={canClassify} />;
 
   const contentBlock = (
     <div>
@@ -367,6 +384,7 @@ export function SubmissionDetailBody({ submissionId, layout, onAfterDelete }: Bo
           {badges}
           <SubmitterPanel submission={data} canEdit={canClassify} />
           {assigneePicker}
+          {pspBlock}
           <Separator />
           {contentBlock}
         </div>
@@ -385,6 +403,7 @@ export function SubmissionDetailBody({ submissionId, layout, onAfterDelete }: Bo
       {badges}
       <SubmitterPanel submission={data} canEdit={canClassify} />
       {assigneePicker}
+      {pspBlock}
       <Separator />
       {contentBlock}
       <Separator />
@@ -392,6 +411,101 @@ export function SubmissionDetailBody({ submissionId, layout, onAfterDelete }: Bo
       <Separator />
       {responseBlock}
       {deleteBlock}
+    </div>
+  );
+}
+
+function PspPanel({
+  submission,
+  canManage,
+}: {
+  submission: NonNullable<ReturnType<typeof useSubmission>["data"]>;
+  canManage: boolean;
+}) {
+  const route = useRouteToPsp();
+  const returnFromPsp = useReturnFromPsp();
+  const routed = !!submission.psp_routed_at;
+  const completed = !!submission.psp_completed_at;
+
+  if (!canManage && !routed) return null;
+
+  const handleRoute = () => {
+    route.mutate(
+      { id: submission.id, reason: null },
+      {
+        onSuccess: () => toast.success("Routed to PSP queue"),
+        onError: (e) =>
+          toast.error(e instanceof Error ? e.message : "Failed to route"),
+      },
+    );
+  };
+
+  const handleReturn = () => {
+    returnFromPsp.mutate(submission.id, {
+      onSuccess: () => toast.success("Returned to main workflow"),
+      onError: (e) =>
+        toast.error(e instanceof Error ? e.message : "Failed to return"),
+    });
+  };
+
+  return (
+    <div className="rounded-md border bg-muted/30 p-3 text-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            PSP routing
+          </div>
+          {routed ? (
+            <div className="mt-1 space-y-1">
+              <p className="text-foreground">
+                {completed
+                  ? "Answered by PSP and closed out."
+                  : "Sitting in the PSP queue for a logistical answer."}
+              </p>
+              {submission.psp_reason && (
+                <p className="text-xs text-muted-foreground italic">
+                  Reason: {submission.psp_reason}
+                </p>
+              )}
+              {submission.psp_note && (
+                <p className="text-xs text-muted-foreground">
+                  Note: {submission.psp_note}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="mt-1 text-muted-foreground">
+              Not routed. Send to PSP if this is a logistical question rather
+              than substantive feedback.
+            </p>
+          )}
+        </div>
+        {canManage && (
+          <div className="shrink-0">
+            {routed ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleReturn}
+                disabled={returnFromPsp.isPending}
+              >
+                <CornerUpLeft className="mr-1.5 h-3.5 w-3.5" />
+                Return to workflow
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleRoute}
+                disabled={route.isPending}
+              >
+                <HelpCircle className="mr-1.5 h-3.5 w-3.5" />
+                Route to PSP
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

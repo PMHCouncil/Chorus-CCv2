@@ -46,7 +46,14 @@ export interface Submission {
   assigned_at: string | null;
   assigned_by: string | null;
   archived_at: string | null;
+  psp_routed_at: string | null;
+  psp_completed_at: string | null;
+  psp_completed_by: string | null;
+  psp_reason: string | null;
+  psp_note: string | null;
 }
+
+export type PspFilter = "open" | "completed" | "all";
 
 export interface StaffMember {
   id: string;
@@ -67,6 +74,10 @@ export interface SubmissionFilters {
   roleAffected?: string;
   assignee?: string | "all" | "unassigned";
   archived?: ArchivedFilter;
+  // When true, surface submissions parked in the PSP queue alongside the
+  // main inbox. Defaults to false — open PSP-routed items are hidden so
+  // the inbox stays focused on substantive feedback.
+  includePspRouted?: boolean;
 }
 
 export function useSubmissions(filters: SubmissionFilters = {}) {
@@ -113,6 +124,13 @@ export function useSubmissions(filters: SubmissionFilters = {}) {
       const archived = filters.archived ?? "active";
       if (archived === "active") query = query.is("archived_at", null);
       else if (archived === "archived") query = query.not("archived_at", "is", null);
+
+      // PSP-routed submissions live in their own stream and don't appear in
+      // the main inbox — whether they're open or completed. "Return to
+      // workflow" clears psp_routed_at, at which point the row reappears.
+      if (!filters.includePspRouted) {
+        query = query.is("psp_routed_at", null);
+      }
 
       if (filters.assignee && filters.assignee !== "all") {
         if (filters.assignee === "unassigned") query = query.is("assigned_to", null);
@@ -458,6 +476,136 @@ export function useBulkArchive() {
       return input.ids;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["submissions"] }),
+  });
+}
+
+export function usePspQueue(filter: PspFilter = "open") {
+  return useQuery({
+    queryKey: ["psp-queue", filter],
+    queryFn: async () => {
+      let q = supabase
+        .from("submissions")
+        .select("*")
+        .not("psp_routed_at", "is", null)
+        .order("psp_routed_at", { ascending: false })
+        .limit(500);
+      if (filter === "open") q = q.is("psp_completed_at", null);
+      else if (filter === "completed") q = q.not("psp_completed_at", "is", null);
+      const { data, error } = await q;
+      if (error) throw error;
+      return (data ?? []) as Submission[];
+    },
+  });
+}
+
+export function usePspOpenCount() {
+  return useQuery({
+    queryKey: ["psp-queue-count"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("submissions")
+        .select("id", { count: "exact", head: true })
+        .not("psp_routed_at", "is", null)
+        .is("psp_completed_at", null);
+      if (error) throw error;
+      return count ?? 0;
+    },
+  });
+}
+
+function invalidatePsp(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ["psp-queue"] });
+  qc.invalidateQueries({ queryKey: ["psp-queue-count"] });
+  qc.invalidateQueries({ queryKey: ["submissions"] });
+}
+
+export function useRouteToPsp() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; reason?: string | null }) => {
+      const { error } = await supabase
+        .from("submissions")
+        .update({
+          psp_routed_at: new Date().toISOString(),
+          psp_reason: input.reason?.trim() || null,
+          psp_completed_at: null,
+          psp_completed_by: null,
+        } as never)
+        .eq("id", input.id);
+      if (error) throw error;
+      await logAuditEvent({
+        action: "submission.psp_routed",
+        entity_type: "submission",
+        entity_id: input.id,
+        details: { source: "manual", reason: input.reason ?? null },
+      }).catch(() => undefined);
+      return input.id;
+    },
+    onSuccess: (id) => {
+      qc.invalidateQueries({ queryKey: ["submission", id] });
+      invalidatePsp(qc);
+    },
+  });
+}
+
+export function useCompletePspItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; note?: string | null }) => {
+      const { data: userRes } = await supabase.auth.getUser();
+      const userId = userRes.user?.id ?? null;
+      const { error } = await supabase
+        .from("submissions")
+        .update({
+          psp_completed_at: new Date().toISOString(),
+          psp_completed_by: userId,
+          psp_note: input.note?.trim() || null,
+          archived_at: new Date().toISOString(),
+        } as never)
+        .eq("id", input.id);
+      if (error) throw error;
+      await logAuditEvent({
+        action: "submission.psp_completed",
+        entity_type: "submission",
+        entity_id: input.id,
+        details: { has_note: !!input.note?.trim() },
+      }).catch(() => undefined);
+      return input.id;
+    },
+    onSuccess: (id) => {
+      qc.invalidateQueries({ queryKey: ["submission", id] });
+      invalidatePsp(qc);
+    },
+  });
+}
+
+export function useReturnFromPsp() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("submissions")
+        .update({
+          psp_routed_at: null,
+          psp_completed_at: null,
+          psp_completed_by: null,
+          psp_reason: null,
+          psp_note: null,
+          archived_at: null,
+        } as never)
+        .eq("id", id);
+      if (error) throw error;
+      await logAuditEvent({
+        action: "submission.psp_returned",
+        entity_type: "submission",
+        entity_id: id,
+      }).catch(() => undefined);
+      return id;
+    },
+    onSuccess: (id) => {
+      qc.invalidateQueries({ queryKey: ["submission", id] });
+      invalidatePsp(qc);
+    },
   });
 }
 

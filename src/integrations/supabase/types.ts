@@ -285,6 +285,11 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          psp_completed_at: string | null
+          psp_completed_by: string | null
+          psp_note: string | null
+          psp_reason: string | null
+          psp_routed_at: string | null
           raw_data: Json | null
           source: Database["public"]["Enums"]["submission_source"]
           status: Database["public"]["Enums"]["submission_status"]
@@ -302,6 +307,11 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          psp_completed_at?: string | null
+          psp_completed_by?: string | null
+          psp_note?: string | null
+          psp_reason?: string | null
+          psp_routed_at?: string | null
           raw_data?: Json | null
           source?: Database["public"]["Enums"]["submission_source"]
           status?: Database["public"]["Enums"]["submission_status"]
@@ -319,6 +329,11 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          psp_completed_at?: string | null
+          psp_completed_by?: string | null
+          psp_note?: string | null
+          psp_reason?: string | null
+          psp_routed_at?: string | null
           raw_data?: Json | null
           source?: Database["public"]["Enums"]["submission_source"]
           status?: Database["public"]["Enums"]["submission_status"]

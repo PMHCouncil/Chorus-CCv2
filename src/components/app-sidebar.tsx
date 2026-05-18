@@ -25,8 +25,10 @@ import {
   Settings,
   BarChart3,
   EyeOff,
+  HelpCircle,
 } from "lucide-react";
 import type { AppRole } from "@/lib/auth";
+import { usePspOpenCount } from "@/lib/submissions";
 
 type NavItem = {
   title: string;
@@ -40,6 +42,7 @@ const STAFF: AppRole[] = ["hr", "exec", "gm", "gm_ea", "director", "group_manage
 const NAV: NavItem[] = [
   { title: "Dashboard", to: "/app", icon: LayoutDashboard, roles: STAFF },
   { title: "Inbox", to: "/app/inbox", icon: Inbox, roles: ["hr", "gm", "gm_ea", "director", "group_manager"] },
+  { title: "PSP queue", to: "/app/psp-queue", icon: HelpCircle, roles: ["hr", "gm", "gm_ea", "director", "group_manager"] },
   { title: "Analytics", to: "/app/analytics", icon: BarChart3, roles: STAFF },
   { title: "Themes", to: "/app/themes", icon: Layers, roles: STAFF },
   { title: "Responses", to: "/app/responses", icon: MessageSquareText, roles: STAFF },
@@ -54,6 +57,7 @@ export function AppSidebar({ roles }: { roles: AppRole[] }) {
   const collapsed = state === "collapsed";
   const pathname = usePathname();
   const visible = NAV.filter((i) => i.roles.some((r) => roles.includes(r)));
+  const { data: pspOpenCount = 0 } = usePspOpenCount();
 
   return (
     <Sidebar collapsible="icon">
@@ -78,12 +82,25 @@ export function AppSidebar({ roles }: { roles: AppRole[] }) {
               {visible.map((item) => {
                 const isActive =
                   item.to === "/app" ? pathname === "/app" : pathname.startsWith(item.to);
+                const badgeCount =
+                  item.to === "/app/psp-queue" && pspOpenCount > 0
+                    ? pspOpenCount
+                    : null;
                 return (
                   <SidebarMenuItem key={item.to}>
                     <SidebarMenuButton asChild isActive={isActive}>
                       <Link href={item.to} className="flex items-center gap-2">
                         <item.icon className="h-4 w-4" />
-                        {!collapsed && <span>{item.title}</span>}
+                        {!collapsed && (
+                          <>
+                            <span>{item.title}</span>
+                            {badgeCount != null && (
+                              <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                                {badgeCount}
+                              </span>
+                            )}
+                          </>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
