@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { logAuditEvent } from "@/lib/actions/audit";
 
 export type DecisionStatus =
   | "Acknowledged"
@@ -88,15 +89,12 @@ export function useRecordDecision() {
         .select()
         .single();
       if (error) throw error;
-      if (userRes.user) {
-        await supabase.from("audit_log").insert({
-          user_id: userRes.user.id,
-          action: "decision.recorded",
-          entity_type: "theme",
-          entity_id: input.themeId,
-          details: { status: input.status, has_notes: !!input.notes?.trim() },
-        });
-      }
+      await logAuditEvent({
+        action: "decision.recorded",
+        entity_type: "theme",
+        entity_id: input.themeId,
+        details: { status: input.status, has_notes: !!input.notes?.trim() },
+      }).catch(() => undefined);
       return data as DecisionRow;
     },
     onSuccess: (_d, vars) => {

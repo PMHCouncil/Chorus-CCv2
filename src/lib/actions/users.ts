@@ -113,9 +113,12 @@ export async function listUsers(): Promise<{
     const hasUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
     const hasKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
     const keyLen = process.env.SUPABASE_SERVICE_ROLE_KEY?.length ?? 0;
-    const debug = `${msg} | env: url=${hasUrl} key=${hasKey} keyLen=${keyLen}`;
-    console.error("[listUsers] failed:", debug);
-    return { users: [], debug };
+    // Server-side log keeps the env diagnostics. Client gets a generic message
+    // so we don't leak service-role-key presence/length to the browser.
+    console.error(
+      `[listUsers] failed: ${msg} | env: url=${hasUrl} key=${hasKey} keyLen=${keyLen}`,
+    );
+    return { users: [], debug: "Failed to list users. See server logs." };
   }
 }
 
@@ -247,9 +250,46 @@ const ResetSchema = z.object({
   redirect_to: z.string().url().optional(),
 });
 
+/**
+ * Resolves `redirect_to` against an allowlist of our own origins. Anything
+ * else (or a malformed URL) is rejected — Supabase's recovery link embeds the
+ * one-time token in this URL, so accepting attacker-supplied hosts lets a
+ * compromised/coerced admin exfiltrate the token to an external site.
+ */
+function assertAllowedRedirect(target: string | undefined): string | undefined {
+  if (!target) return undefined;
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  const allowed = new Set<string>();
+  if (siteUrl) {
+    try {
+      allowed.add(new URL(siteUrl).origin);
+    } catch {
+      /* ignore malformed env */
+    }
+  }
+  // Allow localhost during development for the admin password-reset flow.
+  if (process.env.NODE_ENV !== "production") {
+    allowed.add("http://localhost:3000");
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(target);
+  } catch {
+    throw new Error("Invalid redirect_to URL");
+  }
+  if (!allowed.has(parsed.origin)) {
+    throw new Error(
+      `redirect_to origin ${parsed.origin} is not allowed. Configure NEXT_PUBLIC_SITE_URL to whitelist it.`,
+    );
+  }
+  return parsed.toString();
+}
+
 export async function forcePasswordReset(input: z.input<typeof ResetSchema>) {
   const data = ResetSchema.parse(input);
   const { supabaseAdmin, userId } = await requireAdmin();
+
+  const redirectTo = assertAllowedRedirect(data.redirect_to);
 
   const { data: u, error: getErr } = await supabaseAdmin.auth.admin.getUserById(
     data.user_id,
@@ -259,7 +299,7 @@ export async function forcePasswordReset(input: z.input<typeof ResetSchema>) {
   const { error } = await supabaseAdmin.auth.admin.generateLink({
     type: "recovery",
     email: u.user.email,
-    options: data.redirect_to ? { redirectTo: data.redirect_to } : undefined,
+    options: redirectTo ? { redirectTo } : undefined,
   });
   if (error) throw new Error(error.message);
 

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { draftResponse } from "@/lib/actions/responses";
+import { logAuditEvent } from "@/lib/actions/audit";
 import type { FlowStep, FlowTimestamps } from "@/components/submissions/submission-flow";
 
 export type ResponseStatus = "draft" | "hr_reviewed" | "exec_approved" | "sent";
@@ -343,15 +344,11 @@ export function useUpdateResponseDraft() {
         })
         .eq("id", input.id);
       if (error) throw error;
-      const { data: userRes } = await supabase.auth.getUser();
-      if (userRes.user) {
-        await supabase.from("audit_log").insert({
-          user_id: userRes.user.id,
-          action: "response.updated",
-          entity_type: "response",
-          entity_id: input.id,
-        });
-      }
+      await logAuditEvent({
+        action: "response.updated",
+        entity_type: "response",
+        entity_id: input.id,
+      }).catch(() => undefined);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["response"] });
@@ -369,15 +366,11 @@ export function useReviewResponse() {
         .update({ status: "hr_reviewed" })
         .eq("id", input.id);
       if (error) throw error;
-      const { data: userRes } = await supabase.auth.getUser();
-      if (userRes.user) {
-        await supabase.from("audit_log").insert({
-          user_id: userRes.user.id,
-          action: "response.hr_reviewed",
-          entity_type: "response",
-          entity_id: input.id,
-        });
-      }
+      await logAuditEvent({
+        action: "response.hr_reviewed",
+        entity_type: "response",
+        entity_id: input.id,
+      }).catch(() => undefined);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["response"] });
@@ -400,14 +393,11 @@ export function useApproveResponse() {
         .from("submissions")
         .update({ status: "responded" })
         .eq("id", input.submissionId);
-      if (userRes.user) {
-        await supabase.from("audit_log").insert({
-          user_id: userRes.user.id,
-          action: "response.exec_approved",
-          entity_type: "response",
-          entity_id: input.id,
-        });
-      }
+      await logAuditEvent({
+        action: "response.exec_approved",
+        entity_type: "response",
+        entity_id: input.id,
+      }).catch(() => undefined);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["response"] });
@@ -430,15 +420,11 @@ export function useMarkResponseSent() {
         .from("submissions")
         .update({ status: "sent" })
         .eq("id", input.submissionId);
-      const { data: userRes } = await supabase.auth.getUser();
-      if (userRes.user) {
-        await supabase.from("audit_log").insert({
-          user_id: userRes.user.id,
-          action: "response.sent",
-          entity_type: "response",
-          entity_id: input.id,
-        });
-      }
+      await logAuditEvent({
+        action: "response.sent",
+        entity_type: "response",
+        entity_id: input.id,
+      }).catch(() => undefined);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["response"] });

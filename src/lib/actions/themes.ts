@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { requireUser } from "@/lib/auth-server";
+import { logAuditEvent } from "@/lib/actions/audit";
 
 const InputSchema = z.object({
   sourceId: z.string().uuid(),
@@ -29,8 +30,7 @@ export async function mergeThemes(input: { sourceId: string; targetId: string })
   });
   if (rpcErr) throw new Error(rpcErr.message);
 
-  await supabase.from("audit_log").insert({
-    user_id: userId,
+  await logAuditEvent({
     action: "theme.merged",
     entity_type: "theme",
     entity_id: targetId,
@@ -38,7 +38,8 @@ export async function mergeThemes(input: { sourceId: string; targetId: string })
       merged_from: { id: source.id, name: source.name },
       merged_into: { id: target.id, name: target.name },
     },
-  });
+  }).catch(() => undefined);
 
+  void userId;
   return { ok: true as const };
 }

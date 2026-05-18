@@ -9,10 +9,20 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
+function safeNext(raw: string | null): string {
+  if (!raw) return "/app";
+  // Only accept same-origin paths. Reject protocol-relative ("//evil"),
+  // absolute URLs, and anything that doesn't start with a single "/".
+  if (!raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) {
+    return "/app";
+  }
+  return raw;
+}
+
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") || "/app";
+  const next = safeNext(searchParams.get("next"));
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

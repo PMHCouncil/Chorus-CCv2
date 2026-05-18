@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { mergeThemes } from "@/lib/actions/themes";
+import { logAuditEvent } from "@/lib/actions/audit";
 import type { Sentiment } from "./classify";
 
 export interface ThemeRow {
@@ -170,16 +171,14 @@ export function useUpdateTheme() {
       id: string;
       patch: Partial<Pick<ThemeRow, "name" | "summary" | "description">>;
     }) => {
-      const { data: userRes } = await supabase.auth.getUser();
       const { error } = await supabase.from("themes").update(input.patch).eq("id", input.id);
       if (error) throw error;
-      await supabase.from("audit_log").insert({
-        user_id: userRes.user?.id ?? null,
+      await logAuditEvent({
         action: "theme.updated",
         entity_type: "theme",
         entity_id: input.id,
         details: input.patch,
-      });
+      }).catch(() => undefined);
     },
     onSuccess: (_d, vars) => {
       qc.invalidateQueries({ queryKey: ["themes"] });
@@ -192,7 +191,6 @@ export function useDeleteTheme() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (themeId: string) => {
-      const { data: userRes } = await supabase.auth.getUser();
       const { error: linkErr } = await supabase
         .from("submission_themes")
         .delete()
@@ -200,13 +198,12 @@ export function useDeleteTheme() {
       if (linkErr) throw linkErr;
       const { error } = await supabase.from("themes").delete().eq("id", themeId);
       if (error) throw error;
-      await supabase.from("audit_log").insert({
-        user_id: userRes.user?.id ?? null,
+      await logAuditEvent({
         action: "theme.deleted",
         entity_type: "theme",
         entity_id: themeId,
         details: {},
-      });
+      }).catch(() => undefined);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["themes"] });

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth, hasAnyRole } from "@/lib/auth";
 import { useBulkClassify } from "@/lib/submissions";
+import { setAppSettings } from "@/lib/actions/settings";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -127,18 +128,16 @@ export default function SettingsPage() {
   };
 
   const save = useMutation({
-    mutationFn: async () => {
-      const { data: userRes } = await supabase.auth.getUser();
-      const ts = new Date().toISOString();
-      const uid = userRes.user?.id ?? null;
-      const rows = [
-        { key: "classifier_system_prompt", value: prompt, updated_by: uid, updated_at: ts },
-        { key: "classifier_model", value: model, updated_by: uid, updated_at: ts },
-        { key: "responder_system_prompt", value: responderPrompt, updated_by: uid, updated_at: ts },
-      ];
-      const { error } = await supabase.from("app_settings").upsert(rows, { onConflict: "key" });
-      if (error) throw error;
-    },
+    mutationFn: () =>
+      // Server action: requireAdmin + key whitelist + audit row. Direct anon
+      // upserts were removed by the 2026-05-18 hardening pass.
+      setAppSettings({
+        entries: [
+          { key: "classifier_system_prompt", value: prompt },
+          { key: "classifier_model", value: model },
+          { key: "responder_system_prompt", value: responderPrompt },
+        ],
+      }),
     onSuccess: () => {
       toast.success("Settings saved");
       qc.invalidateQueries({ queryKey: ["app_settings"] });
