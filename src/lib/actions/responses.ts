@@ -8,6 +8,8 @@ const DEFAULT_RESPONDER_PROMPT = `You are drafting a personal acknowledgement re
 
 Tone: warm, respectful, professional, plain English. No corporate jargon. Australian spelling. 120-220 words.
 
+Punctuation: do NOT use em dashes (—) anywhere in the reply. Use commas, full stops, or a hyphen-with-spaces ( - ) instead.
+
 Structure:
 1. Open with a sincere thank-you addressed to the submitter by first name (or "Hi there" if name unknown).
 2. Briefly reflect back the SPECIFIC concerns / themes they raised (do not paraphrase generically).
@@ -140,7 +142,8 @@ export async function draftResponse(input: { submissionId: string }) {
   const aiJson = (await aiRes.json()) as {
     content?: Array<{ type: string; text?: string }>;
   };
-  const draftText = aiJson.content?.find((c) => c.type === "text")?.text?.trim() ?? "";
+  const rawDraft = aiJson.content?.find((c) => c.type === "text")?.text?.trim() ?? "";
+  const draftText = rawDraft.replace(/\s*—\s*/g, " - ").replace(/[ \t]{2,}/g, " ");
 
   if (!draftText) throw new Error("AI returned an empty draft. Try again.");
 
