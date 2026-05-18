@@ -3,8 +3,38 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { format } from "date-fns";
 import { toast } from "sonner";
+
+const AEST_TIMEZONE = "Australia/Sydney";
+
+const aestShortFormatter = new Intl.DateTimeFormat("en-AU", {
+  day: "numeric",
+  month: "short",
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+  timeZone: AEST_TIMEZONE,
+});
+
+function formatAestShort(value: string | Date) {
+  const d = value instanceof Date ? value : new Date(value);
+  return aestShortFormatter.format(d);
+}
+
+function formatAestForExport(value: string | Date) {
+  const d = value instanceof Date ? value : new Date(value);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: AEST_TIMEZONE,
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}`;
+}
 import {
   Table,
   TableBody,
@@ -50,7 +80,6 @@ import {
   SlidersHorizontal,
   Upload,
 } from "lucide-react";
-import { format as fmt } from "date-fns";
 import { ExportMenu } from "@/components/export-menu";
 import { exportCSV, exportPDF, type ExportColumn } from "@/lib/export";
 import type { Submission } from "@/lib/submissions";
@@ -206,7 +235,7 @@ export default function InboxPage() {
   const exportColumns: ExportColumn<Submission>[] = [
     {
       header: "Received",
-      accessor: (s) => fmt(new Date(s.submitted_at), "yyyy-MM-dd HH:mm"),
+      accessor: (s) => formatAestForExport(s.submitted_at),
       width: 28,
     },
     { header: "Source", accessor: (s) => SOURCE_LABELS[s.source] },
@@ -520,7 +549,7 @@ export default function InboxPage() {
                       </TableCell>
                     )}
                     <TableCell className="text-xs text-muted-foreground">
-                      {format(new Date(s.submitted_at), "d MMM, h:mm a")}
+                      {formatAestShort(s.submitted_at)} AEST
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">{SOURCE_LABELS[s.source]}</Badge>
@@ -641,7 +670,7 @@ function MobileSubmissionCard({
               : "Anonymous"}
           </div>
           <div className="text-[11px] text-muted-foreground mt-0.5">
-            {format(new Date(s.submitted_at), "d MMM, h:mm a")}
+            {formatAestShort(s.submitted_at)} AEST
           </div>
         </div>
         <div className="flex flex-col items-end gap-1 shrink-0">
