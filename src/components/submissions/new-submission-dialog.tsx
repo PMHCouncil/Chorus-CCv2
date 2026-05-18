@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { z } from "zod";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -26,22 +25,10 @@ import {
 import { Plus } from "lucide-react";
 import {
   SOURCE_LABELS,
+  submissionInputSchema,
   useCreateSubmission,
   type SubmissionSource,
 } from "@/lib/submissions";
-
-const schema = z.object({
-  source: z.enum(["form", "email", "cc", "other"]),
-  submitter_name: z.string().trim().max(200).optional(),
-  submitter_email: z
-    .string()
-    .trim()
-    .max(255)
-    .optional()
-    .refine((v) => !v || /.+@.+\..+/.test(v), { message: "Invalid email" }),
-  submitter_role: z.string().trim().max(200).optional(),
-  content: z.string().trim().min(5, "Content is required").max(20000),
-});
 
 export function NewSubmissionDialog() {
   const [open, setOpen] = useState(false);
@@ -62,7 +49,7 @@ export function NewSubmissionDialog() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const parsed = schema.safeParse({
+    const parsed = submissionInputSchema.safeParse({
       source,
       submitter_name: name || undefined,
       submitter_email: email || undefined,

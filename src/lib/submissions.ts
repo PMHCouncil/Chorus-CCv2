@@ -1,9 +1,34 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { classifySubmission } from "@/lib/actions/classify";
+import { logAuditEvent } from "@/lib/actions/audit";
 
 export type SubmissionSource = "form" | "email" | "cc" | "other";
 export type SubmissionStatus = "new" | "classified" | "themed" | "responded" | "sent";
+
+export const SUBMISSION_SOURCES: readonly SubmissionSource[] = [
+  "form",
+  "email",
+  "cc",
+  "other",
+] as const;
+
+// Shared by the New-submission dialog and the bulk import normalizer so
+// both paths enforce identical rules.
+export const submissionInputSchema = z.object({
+  source: z.enum(["form", "email", "cc", "other"]),
+  submitter_name: z.string().trim().max(200).optional(),
+  submitter_email: z
+    .string()
+    .trim()
+    .max(255)
+    .optional()
+    .refine((v) => !v || /.+@.+\..+/.test(v), { message: "Invalid email" }),
+  submitter_role: z.string().trim().max(200).optional(),
+  content: z.string().trim().min(5, "Content is required").max(20000),
+  submitted_at: z.string().datetime({ offset: true }).optional(),
+});
 
 export interface Submission {
   id: string;
@@ -159,13 +184,12 @@ export function useCreateSubmission() {
       if (error) throw error;
 
       if (userId) {
-        await supabase.from("audit_log").insert({
-          user_id: userId,
+        await logAuditEvent({
           action: "submission.created",
           entity_type: "submission",
           entity_id: data.id,
           details: { source: payload.source },
-        });
+        }).catch(() => undefined);
       }
 
       return data as Submission;
@@ -176,21 +200,105 @@ export function useCreateSubmission() {
   });
 }
 
+export interface BulkImportInput {
+  rows: NewSubmissionInput[];
+  batchId: string;
+  importSource: "csv" | "xlsx" | "paste-table" | "paste-blocks";
+  filename?: string;
+  onProgress?: (inserted: number, total: number) => void;
+}
+
+export interface BulkImportResult {
+  inserted: number;
+  failed: number;
+  errors: { batchStart: number; error: string }[];
+  batchId: string;
+}
+
+const BULK_INSERT_BATCH_SIZE = 100;
+
+export function useBulkCreateSubmissions() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: BulkImportInput): Promise<BulkImportResult> => {
+      const { data: userRes } = await supabase.auth.getUser();
+      const userId = userRes.user?.id ?? null;
+
+      const total = input.rows.length;
+      const payloads = input.rows.map((row) => ({
+        source: row.source,
+        submitter_name: row.submitter_name?.trim() || null,
+        submitter_email: row.submitter_email?.trim() || null,
+        submitter_role: row.submitter_role?.trim() || null,
+        content: row.content.trim(),
+        submitted_at: row.submitted_at ?? new Date().toISOString(),
+        created_by: userId,
+        status: "new" as const,
+        raw_data: {
+          import_batch_id: input.batchId,
+          import_source: input.importSource,
+          ...(input.filename ? { import_filename: input.filename } : {}),
+        } as never,
+      }));
+
+      let inserted = 0;
+      let failed = 0;
+      const errors: { batchStart: number; error: string }[] = [];
+
+      for (let i = 0; i < payloads.length; i += BULK_INSERT_BATCH_SIZE) {
+        const batch = payloads.slice(i, i + BULK_INSERT_BATCH_SIZE);
+        const { data, error } = await supabase
+          .from("submissions")
+          .insert(batch)
+          .select("id");
+        if (error) {
+          failed += batch.length;
+          errors.push({ batchStart: i, error: error.message });
+        } else {
+          const ids = (data ?? []).map((r) => r.id as string);
+          inserted += ids.length;
+          if (userId && ids.length > 0) {
+            await Promise.all(
+              ids.map((id) =>
+                logAuditEvent({
+                  action: "submission.imported",
+                  entity_type: "submission",
+                  entity_id: id,
+                  details: {
+                    batch_id: input.batchId,
+                    import_source: input.importSource,
+                    ...(input.filename ? { filename: input.filename } : {}),
+                  },
+                }).catch(() => undefined),
+              ),
+            );
+          }
+        }
+        input.onProgress?.(inserted, total);
+      }
+
+      return { inserted, failed, errors, batchId: input.batchId };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["submissions"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-trend"] });
+      qc.invalidateQueries({ queryKey: ["assignment-stats"] });
+    },
+  });
+}
+
 export function useDeleteSubmission() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("submissions").delete().eq("id", id);
       if (error) throw error;
-      const { data: userRes } = await supabase.auth.getUser();
-      if (userRes.user) {
-        await supabase.from("audit_log").insert({
-          user_id: userRes.user.id,
-          action: "submission.deleted",
-          entity_type: "submission",
-          entity_id: id,
-        });
-      }
+      await logAuditEvent({
+        action: "submission.deleted",
+        entity_type: "submission",
+        entity_id: id,
+      }).catch(() => undefined);
       return id;
     },
     onSuccess: () => {
@@ -238,16 +346,12 @@ export function useUpdateSubmitter() {
         .eq("id", id);
       if (error) throw error;
 
-      const { data: userRes } = await supabase.auth.getUser();
-      if (userRes.user) {
-        await supabase.from("audit_log").insert({
-          user_id: userRes.user.id,
-          action: "submission.submitter_updated",
-          entity_type: "submission",
-          entity_id: id,
-          details: { fields: editedKeys },
-        });
-      }
+      await logAuditEvent({
+        action: "submission.submitter_updated",
+        entity_type: "submission",
+        entity_id: id,
+        details: { fields: editedKeys },
+      }).catch(() => undefined);
       return id;
     },
     onSuccess: (id) => {
@@ -307,16 +411,16 @@ async function logAudit(
   entityIds: string[],
   details: Record<string, unknown> = {},
 ) {
-  const { data: userRes } = await supabase.auth.getUser();
-  if (!userRes.user) return;
-  const rows = entityIds.map((id) => ({
-    user_id: userRes.user!.id,
-    action,
-    entity_type: "submission",
-    entity_id: id,
-    details: details as never,
-  }));
-  if (rows.length) await supabase.from("audit_log").insert(rows);
+  await Promise.all(
+    entityIds.map((id) =>
+      logAuditEvent({
+        action,
+        entity_type: "submission",
+        entity_id: id,
+        details,
+      }).catch(() => undefined),
+    ),
+  );
 }
 
 export function useBulkAssign() {

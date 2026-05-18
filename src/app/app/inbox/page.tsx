@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -47,6 +48,7 @@ import {
   ArchiveRestore,
   X,
   SlidersHorizontal,
+  Upload,
 } from "lucide-react";
 import { format as fmt } from "date-fns";
 import { ExportMenu } from "@/components/export-menu";
@@ -284,6 +286,14 @@ export default function InboxPage() {
             disabled={rows.length === 0}
             count={rows.length}
           />
+          {canIngest && (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/app/submissions/import">
+                <Upload className="mr-2 h-4 w-4" />
+                Import
+              </Link>
+            </Button>
+          )}
           {canIngest && <NewSubmissionDialog />}
         </div>
       </div>
@@ -594,9 +604,17 @@ function EmptyState({ canIngest }: { canIngest: boolean }) {
       <h3 className="mt-4 text-base font-semibold">No submissions yet</h3>
       <p className="mt-1 max-w-sm text-sm text-muted-foreground">
         {canIngest
-          ? "Use 'New submission' to log feedback received via email, CC, or in-person conversations."
+          ? "Use 'New submission' to log feedback one at a time, or import a batch from CSV, Excel, or a pasted spreadsheet."
           : "Submissions will appear here as the consultation progresses."}
       </p>
+      {canIngest && (
+        <Button asChild variant="outline" size="sm" className="mt-4">
+          <Link href="/app/submissions/import">
+            <Upload className="mr-2 h-4 w-4" />
+            Import submissions
+          </Link>
+        </Button>
+      )}
     </div>
   );
 }
