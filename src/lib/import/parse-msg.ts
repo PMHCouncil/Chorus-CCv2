@@ -4,6 +4,23 @@ import MsgReader from "@kenjiuno/msgreader";
 import type { ParsedEmail } from "./parse-email";
 import { parseEmailDate, detectForwardedMessage } from "./parse-email";
 
+function stripHtml(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
+}
+
 export async function parseMsgFile(file: File): Promise<ParsedEmail> {
   const buf = await file.arrayBuffer();
   return parseMsgBuffer(buf);
@@ -44,18 +61,18 @@ function parseMsgBuffer(buf: ArrayBuffer): ParsedEmail {
   }
 
   const bodyText = data.body?.trim() ?? "";
+  const htmlFallbackText = !bodyText && data.bodyHtml ? stripHtml(data.bodyHtml) : "";
+  const effectiveText = bodyText || htmlFallbackText;
 
-  if (!bodyText) {
-    if (data.bodyHtml) {
-      warnings.push(
-        "Only an HTML body was found in this .msg file; plain text was not available.",
-      );
-    } else {
-      warnings.push("No text body found in .msg file.");
-    }
+  if (!effectiveText) {
+    warnings.push("No text body found in .msg file.");
   }
 
-  const forwarded = detectForwardedMessage(bodyText);
+  // Try plain text first; fall back to stripped HTML so Outlook HTML-only forwards
+  // still surface the original sender buried in the forwarded block.
+  const forwarded =
+    detectForwardedMessage(bodyText) ??
+    (htmlFallbackText ? detectForwardedMessage(htmlFallbackText) : null);
 
   return {
     kind: "email",
@@ -64,7 +81,7 @@ function parseMsgBuffer(buf: ArrayBuffer): ParsedEmail {
     originalFrom: forwarded?.from ?? null,
     originalDate: forwarded?.date ?? null,
     originalSubject: forwarded?.subject ?? null,
-    body: (forwarded?.body ?? bodyText).trim(),
+    body: (forwarded?.body ?? effectiveText).trim(),
     warnings,
   };
 }
