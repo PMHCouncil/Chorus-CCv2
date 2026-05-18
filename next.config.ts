@@ -1,11 +1,12 @@
 import type { NextConfig } from "next";
 
-// Content-Security-Policy. Supabase needs https connect-src to the project
-// REST/Realtime endpoint; Anthropic is only called server-side so it doesn't
-// appear here. Next.js inline styles and the React runtime need 'unsafe-inline'
-// for styles; we omit 'unsafe-inline'/'unsafe-eval' from script-src to keep
-// XSS surface tight. Tighten further with nonces if a future refactor adds
-// inline <script> blocks.
+// Content-Security-Policy. Next.js emits inline <script> blocks for runtime
+// hydration / route announcements and uses eval() during `next dev` for HMR,
+// so script-src needs 'unsafe-inline' and (in dev) 'unsafe-eval'. Even with
+// those relaxations the CSP still constrains: frame-ancestors blocks
+// clickjacking, base-uri / form-action / object-src tighten common XSS
+// pivots, and connect-src whitelists Supabase only. A follow-up pass can
+// move to nonce-based script-src to drop 'unsafe-inline'.
 const supabaseOrigin = (() => {
   try {
     return process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -16,13 +17,18 @@ const supabaseOrigin = (() => {
   }
 })();
 
+const isDev = process.env.NODE_ENV !== "production";
+const scriptSrc = isDev
+  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+  : "script-src 'self' 'unsafe-inline'";
+
 const csp = [
   "default-src 'self'",
-  "script-src 'self'",
+  scriptSrc,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
-  `connect-src 'self' ${supabaseOrigin} wss://*.supabase.co`,
+  `connect-src 'self' ${supabaseOrigin} wss://*.supabase.co https://api.anthropic.com`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

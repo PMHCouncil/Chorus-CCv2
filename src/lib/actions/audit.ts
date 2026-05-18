@@ -23,17 +23,13 @@ export async function logAuditEvent(input: AuditInput): Promise<void> {
   const data = AuditSchema.parse(input);
   const { supabase } = await requireUser();
 
-  // Cast the RPC name: this function was added in the 20260518 hardening
-  // migration and is not yet present in the supabase-generated Database
-  // types. Regenerate types and drop the cast once the migration ships.
-  const { error } = await (supabase.rpc as unknown as (
-    fn: string,
-    args: Record<string, unknown>,
-  ) => Promise<{ error: { message: string } | null }>)("log_audit_event", {
+  const { error } = await supabase.rpc("log_audit_event", {
     _action: data.action,
     _entity_type: data.entity_type,
-    _entity_id: data.entity_id ?? null,
-    _details: data.details ?? {},
+    // PG accepts NULL for this uuid parameter; the generated TS type marks
+    // it required because the function signature has no DEFAULT NULL.
+    _entity_id: (data.entity_id ?? null) as unknown as string,
+    _details: (data.details ?? {}) as never,
   });
 
   if (error) {

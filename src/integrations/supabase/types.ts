@@ -401,6 +401,15 @@ export type Database = {
       is_content_approver: { Args: { _user_id: string }; Returns: boolean }
       is_content_editor: { Args: { _user_id: string }; Returns: boolean }
       is_content_staff: { Args: { _user_id: string }; Returns: boolean }
+      log_audit_event: {
+        Args: {
+          _action: string
+          _details?: Json
+          _entity_id: string
+          _entity_type: string
+        }
+        Returns: string
+      }
       merge_themes: {
         Args: { _source_id: string; _target_id: string }
         Returns: undefined
