@@ -2,6 +2,9 @@
 
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
+import { parseEmailFile, type ParsedEmail } from "./parse-email";
+
+export type { ParsedEmail } from "./parse-email";
 
 export interface ParsedTable {
   kind: "table";
@@ -21,16 +24,18 @@ export interface ParsedFreeform {
   warnings: string[];
 }
 
-export type ParseResult = ParsedTable | ParsedFreeform;
+export type ParseResult = ParsedTable | ParsedFreeform | ParsedEmail;
 
 const TABULAR_EXT = /\.(csv|tsv|txt)$/i;
 const EXCEL_EXT = /\.(xlsx|xls)$/i;
+const EMAIL_EXT = /\.eml$/i;
 
 export async function parseFile(file: File): Promise<ParseResult> {
   if (EXCEL_EXT.test(file.name)) return parseExcelFile(file);
   if (TABULAR_EXT.test(file.name)) return parseDelimitedFile(file);
+  if (EMAIL_EXT.test(file.name)) return parseEmailFile(file);
   throw new Error(
-    "Unsupported file type. Upload a .csv, .tsv, .xlsx, or .xls file.",
+    "Unsupported file type. Upload a .csv, .tsv, .xlsx, .xls, or .eml file.",
   );
 }
 

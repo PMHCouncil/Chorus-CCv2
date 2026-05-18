@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { FileUp, FileSpreadsheet, Download } from "lucide-react";
+import { FileUp, FileSpreadsheet, Download, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { parseFile, type ParseResult } from "@/lib/import/parse";
@@ -10,7 +10,7 @@ import { downloadTemplate } from "@/lib/import/template";
 interface Props {
   onParsed: (
     result: ParseResult,
-    meta: { filename: string; importSource: "csv" | "xlsx" },
+    meta: { filename: string; importSource: "csv" | "xlsx" | "email" },
   ) => void;
 }
 
@@ -24,11 +24,14 @@ export function FileUploadStep({ onParsed }: Props) {
       setWorking(true);
       try {
         const result = await parseFile(file);
-        const ext = file.name.toLowerCase().endsWith(".xlsx") ||
-          file.name.toLowerCase().endsWith(".xls")
-          ? "xlsx"
-          : "csv";
-        onParsed(result, { filename: file.name, importSource: ext });
+        const name = file.name.toLowerCase();
+        const importSource =
+          name.endsWith(".xlsx") || name.endsWith(".xls")
+            ? "xlsx"
+            : name.endsWith(".eml")
+              ? "email"
+              : "csv";
+        onParsed(result, { filename: file.name, importSource });
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Could not read file");
       } finally {
@@ -61,14 +64,14 @@ export function FileUploadStep({ onParsed }: Props) {
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-background border">
           <FileUp className="h-5 w-5 text-muted-foreground" />
         </div>
-        <div className="mt-3 text-sm font-medium">Drop a CSV or Excel file here</div>
+        <div className="mt-3 text-sm font-medium">Drop a file here</div>
         <div className="text-xs text-muted-foreground mt-1">
-          .csv, .tsv, .xlsx, or .xls · parsed locally in your browser
+          .csv, .tsv, .xlsx, .xls — or drag an <Mail className="inline h-3 w-3 mx-0.5 align-text-bottom" />.eml email file · parsed locally in your browser
         </div>
         <input
           ref={inputRef}
           type="file"
-          accept=".csv,.tsv,.txt,.xlsx,.xls"
+          accept=".csv,.tsv,.txt,.xlsx,.xls,.eml"
           className="sr-only"
           onChange={(e) => {
             const f = e.target.files?.[0];

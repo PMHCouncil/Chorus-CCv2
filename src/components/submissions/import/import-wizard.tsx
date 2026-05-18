@@ -7,11 +7,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { AlertTriangle, ArrowLeft } from "lucide-react";
 import {
+  submissionInputSchema,
   useBulkCreateSubmissions,
   type NewSubmissionInput,
   type BulkImportResult,
 } from "@/lib/submissions";
-import type { ParseResult, ParsedTable, ParsedFreeform } from "@/lib/import/parse";
+import type { ParseResult, ParsedTable, ParsedFreeform, ParsedEmail } from "@/lib/import/parse";
 import {
   mappingHasContent,
   normaliseFreeformBlock,
@@ -30,9 +31,10 @@ import { PasteStep } from "./paste-step";
 import { ColumnMappingStep } from "./column-mapping-step";
 import { PreviewStep } from "./preview-step";
 import { ImportProgress } from "./import-progress";
+import { EmailReviewStep, type EmailDraft } from "./email-review-step";
 
-type Step = "source" | "map" | "preview" | "running";
-type ImportSource = "csv" | "xlsx" | "paste-table" | "paste-blocks";
+type Step = "source" | "map" | "preview" | "running" | "email-review";
+type ImportSource = "csv" | "xlsx" | "paste-table" | "paste-blocks" | "email";
 
 export interface NormalisedPreviewRow {
   index: number;
@@ -62,6 +64,13 @@ export function ImportWizard() {
   const [progress, setProgress] = useState({ inserted: 0, total: 0 });
   const [result, setResult] = useState<BulkImportResult | null>(null);
   const [dedupeChecking, setDedupeChecking] = useState(false);
+  const [emailDraft, setEmailDraft] = useState<EmailDraft>({
+    submitter_name: "",
+    submitter_email: "",
+    submitted_at: "",
+    content: "",
+    source: "email",
+  });
 
   const bulkCreate = useBulkCreateSubmissions();
 
@@ -75,14 +84,34 @@ export function ImportWizard() {
     setExistingHashes(new Set());
     setProgress({ inserted: 0, total: 0 });
     setResult(null);
+    setEmailDraft({ submitter_name: "", submitter_email: "", submitted_at: "", content: "", source: "email" });
   };
 
   const handleFileParsed = (
     p: ParseResult,
-    meta: { filename: string; importSource: "csv" | "xlsx" },
+    meta: { filename: string; importSource: "csv" | "xlsx" | "email" },
   ) => {
     setParsed(p);
     setParsedMeta(meta);
+
+    if (p.kind === "email") {
+      const preferred = p.originalFrom ?? p.outerFrom;
+      const rawDate = p.originalDate ?? p.outerDate;
+      const localDate = rawDate
+        ? new Date(rawDate).toISOString().slice(0, 16)
+        : "";
+      setEmailDraft({
+        submitter_name: preferred?.name ?? "",
+        submitter_email: preferred?.email ?? "",
+        submitted_at: localDate,
+        content: p.body,
+        source: "email",
+      });
+      setStep("email-review");
+      for (const w of p.warnings) toast.message(w);
+      return;
+    }
+
     if (p.kind === "table") {
       setMapping(suggestMapping(p.headers));
       setStep("map");
@@ -90,6 +119,51 @@ export function ImportWizard() {
       void runDedupeAndPreview(p, { importSource: meta.importSource });
     }
     for (const w of p.warnings) toast.message(w);
+  };
+
+  const handleEmailImport = async () => {
+    if (!parsedMeta) return;
+    const candidate = {
+      source: emailDraft.source,
+      submitter_name: emailDraft.submitter_name || undefined,
+      submitter_email: emailDraft.submitter_email || undefined,
+      submitted_at: emailDraft.submitted_at
+        ? new Date(emailDraft.submitted_at).toISOString()
+        : undefined,
+      content: emailDraft.content,
+    };
+
+    const parsed = submissionInputSchema.safeParse(candidate);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      toast.error(issue?.message ?? "Please fix the highlighted fields before importing.");
+      return;
+    }
+
+    const input = parsed.data as NewSubmissionInput;
+    const batchId = makeBatchId();
+    setStep("running");
+    setProgress({ inserted: 0, total: 1 });
+    setResult(null);
+
+    try {
+      const res = await bulkCreate.mutateAsync({
+        rows: [input],
+        batchId,
+        importSource: "email",
+        filename: parsedMeta.filename,
+        onProgress: (inserted, total) => setProgress({ inserted, total }),
+      });
+      setResult(res);
+      if (res.failed === 0) {
+        toast.success("Imported 1 submission from email");
+      } else {
+        toast.warning("Import failed. See the summary below.");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Import failed");
+      setStep("email-review");
+    }
   };
 
   const handlePasteParsed = (
@@ -129,7 +203,7 @@ export function ImportWizard() {
         }
         seenHashes.add(h);
       });
-    } else {
+    } else if (parsed.kind === "freeform") {
       const f = parsed as ParsedFreeform;
       f.blocks.forEach((block, index) => {
         const norm = normaliseFreeformBlock(block, defaults);
@@ -195,7 +269,7 @@ export function ImportWizard() {
             });
           }
         });
-      } else {
+      } else if (parsedResult.kind === "freeform") {
         parsedResult.blocks.forEach((block) => {
           const n = normaliseFreeformBlock(block, defaults);
           if (n.ok) tempInputs.push({ content: n.input.content });
@@ -207,11 +281,14 @@ export function ImportWizard() {
       setParsedMeta(meta);
 
       // Pre-mark within-batch + existing duplicates as skipped by default.
-      const items = parsedResult.kind === "table"
-        ? parsedResult.rows.map((row) =>
-            normaliseTableRow(row, mapping, defaults),
-          )
-        : parsedResult.blocks.map((block) => normaliseFreeformBlock(block, defaults));
+      const freeformItems =
+        parsedResult.kind === "freeform"
+          ? parsedResult.blocks.map((block) => normaliseFreeformBlock(block, defaults))
+          : [];
+      const items =
+        parsedResult.kind === "table"
+          ? parsedResult.rows.map((row) => normaliseTableRow(row, mapping, defaults))
+          : freeformItems;
       items.forEach((n, idx) => {
         if (!n.ok) return;
         const h = hashRow(n.input);
@@ -339,6 +416,27 @@ export function ImportWizard() {
         </>
       )}
 
+      {step === "email-review" && parsed?.kind === "email" && (
+        <>
+          <EmailReviewStep
+            email={parsed as ParsedEmail}
+            draft={emailDraft}
+            onDraftChange={setEmailDraft}
+          />
+          <div className="flex items-center justify-between">
+            <Button variant="ghost" onClick={() => setStep("source")}>
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back
+            </Button>
+            <Button
+              onClick={handleEmailImport}
+              disabled={!emailDraft.content.trim() || bulkCreate.isPending}
+            >
+              {bulkCreate.isPending ? "Importing…" : "Import this email"}
+            </Button>
+          </div>
+        </>
+      )}
+
       {step === "preview" && (
         <>
           <PreviewStats stats={stats} />
@@ -367,11 +465,17 @@ export function ImportWizard() {
 }
 
 function Stepper({ step }: { step: Step }) {
-  const steps: { id: Step; label: string }[] = [
-    { id: "source", label: "Source" },
-    { id: "map", label: "Map columns" },
-    { id: "preview", label: "Preview" },
-  ];
+  const steps: { id: Step; label: string }[] =
+    step === "email-review"
+      ? [
+          { id: "source", label: "Source" },
+          { id: "email-review", label: "Review email" },
+        ]
+      : [
+          { id: "source", label: "Source" },
+          { id: "map", label: "Map columns" },
+          { id: "preview", label: "Preview" },
+        ];
   const activeIdx = steps.findIndex((s) => s.id === step);
   return (
     <ol className="flex items-center gap-2 text-xs">

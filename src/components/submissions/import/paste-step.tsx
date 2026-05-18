@@ -29,7 +29,9 @@ export function PasteStep({ onParsed }: Props) {
     if (preview.kind === "table") {
       return `Detected ${preview.rows.length} row${preview.rows.length === 1 ? "" : "s"} across ${preview.headers.length} columns.`;
     }
-    return `Detected ${preview.blocks.length} free-form block${preview.blocks.length === 1 ? "" : "s"}. Each block becomes one submission.`;
+    return preview.kind === "freeform"
+      ? `Detected ${preview.blocks.length} free-form block${preview.blocks.length === 1 ? "" : "s"}. Each block becomes one submission.`
+      : "Paste rows from Excel/Sheets, or one feedback body per paragraph (blank line between).";
   })();
 
   const canContinue = preview &&

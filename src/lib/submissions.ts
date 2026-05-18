@@ -203,7 +203,7 @@ export function useCreateSubmission() {
 export interface BulkImportInput {
   rows: NewSubmissionInput[];
   batchId: string;
-  importSource: "csv" | "xlsx" | "paste-table" | "paste-blocks";
+  importSource: "csv" | "xlsx" | "paste-table" | "paste-blocks" | "email";
   filename?: string;
   onProgress?: (inserted: number, total: number) => void;
 }
