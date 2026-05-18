@@ -28,7 +28,7 @@ export function FileUploadStep({ onParsed }: Props) {
         const importSource =
           name.endsWith(".xlsx") || name.endsWith(".xls")
             ? "xlsx"
-            : name.endsWith(".eml")
+            : name.endsWith(".eml") || name.endsWith(".msg")
               ? "email"
               : "csv";
         onParsed(result, { filename: file.name, importSource });
@@ -66,12 +66,12 @@ export function FileUploadStep({ onParsed }: Props) {
         </div>
         <div className="mt-3 text-sm font-medium">Drop a file here</div>
         <div className="text-xs text-muted-foreground mt-1">
-          .csv, .tsv, .xlsx, .xls — or drag an <Mail className="inline h-3 w-3 mx-0.5 align-text-bottom" />.eml email file · parsed locally in your browser
+          .csv, .tsv, .xlsx, .xls — or drag an <Mail className="inline h-3 w-3 mx-0.5 align-text-bottom" />.eml / .msg email file · parsed locally in your browser
         </div>
         <input
           ref={inputRef}
           type="file"
-          accept=".csv,.tsv,.txt,.xlsx,.xls,.eml"
+          accept=".csv,.tsv,.txt,.xlsx,.xls,.eml,.msg"
           className="sr-only"
           onChange={(e) => {
             const f = e.target.files?.[0];
