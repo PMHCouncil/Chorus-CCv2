@@ -309,7 +309,6 @@ export function SubmissionDetailBody({ submissionId, layout, onAfterDelete }: Bo
             label="Roles affected"
             values={rolesAffected}
             onChange={setRolesAffected}
-            placeholder="e.g. Manager Customer Experience"
             disabled={!canClassify}
           />
 
