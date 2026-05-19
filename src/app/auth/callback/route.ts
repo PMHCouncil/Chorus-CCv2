@@ -2,8 +2,28 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/integrations/supabase/server";
 import { createAdminClient } from "@/integrations/supabase/admin";
 
+// `request.url` reflects the internal Node binding (e.g. http://localhost:3000)
+// when Next.js runs behind a reverse proxy like Amplify/Azure App Service.
+// Use the canonical site URL (or forwarded headers) so redirects land on the
+// public host instead of localhost.
+function publicOrigin(request: NextRequest): string {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL;
+  if (configured) {
+    try {
+      return new URL(configured).origin;
+    } catch {
+      /* fall through */
+    }
+  }
+  const fwdHost = request.headers.get("x-forwarded-host");
+  const fwdProto = request.headers.get("x-forwarded-proto") ?? "https";
+  if (fwdHost) return `${fwdProto}://${fwdHost}`;
+  return new URL(request.url).origin;
+}
+
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
+  const origin = publicOrigin(request);
   const code = url.searchParams.get("code");
   const oauthError =
     url.searchParams.get("error_description") || url.searchParams.get("error");
@@ -14,33 +34,34 @@ export async function GET(request: NextRequest) {
     nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/app";
 
   console.error("[auth/callback] received", {
-    origin: url.origin,
+    origin,
+    requestOrigin: url.origin,
     next: nextParam,
     hasCode: Boolean(code),
     oauthError: oauthError ?? null,
   });
 
   if (oauthError) {
-    const loginUrl = new URL("/login", url.origin);
+    const loginUrl = new URL("/login", origin);
     loginUrl.searchParams.set("error", oauthError);
     return NextResponse.redirect(loginUrl);
   }
 
   if (!code) {
-    return NextResponse.redirect(new URL("/login", url.origin));
+    return NextResponse.redirect(new URL("/login", origin));
   }
 
   const supabase = await createClient();
   const { data: exchanged, error } = await supabase.auth.exchangeCodeForSession(code);
   if (error || !exchanged.user) {
     console.error("[auth/callback] exchangeCodeForSession failed", {
-      origin: url.origin,
+      origin,
       next: nextParam,
       message: error?.message ?? null,
       status: (error as { status?: number } | null)?.status ?? null,
       name: error?.name ?? null,
     });
-    const loginUrl = new URL("/login", url.origin);
+    const loginUrl = new URL("/login", origin);
     loginUrl.searchParams.set("error", error?.message ?? "Sign-in failed");
     return NextResponse.redirect(loginUrl);
   }
@@ -59,7 +80,7 @@ export async function GET(request: NextRequest) {
 
   if (rolesError) {
     await supabase.auth.signOut();
-    const loginUrl = new URL("/login", url.origin);
+    const loginUrl = new URL("/login", origin);
     loginUrl.searchParams.set(
       "error",
       `Failed to verify access: ${rolesError.message}`,
@@ -79,7 +100,7 @@ export async function GET(request: NextRequest) {
         delErr.message,
       );
     }
-    const loginUrl = new URL("/login", url.origin);
+    const loginUrl = new URL("/login", origin);
     loginUrl.searchParams.set(
       "error",
       `${userEmail} is not authorized for Chorus. Contact your administrator.`,
@@ -87,5 +108,5 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.redirect(new URL(safeNext, url.origin));
+  return NextResponse.redirect(new URL(safeNext, origin));
 }
