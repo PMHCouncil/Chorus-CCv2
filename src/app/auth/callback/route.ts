@@ -13,6 +13,13 @@ export async function GET(request: NextRequest) {
   const safeNext =
     nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/app";
 
+  console.error("[auth/callback] received", {
+    origin: url.origin,
+    next: nextParam,
+    hasCode: Boolean(code),
+    oauthError: oauthError ?? null,
+  });
+
   if (oauthError) {
     const loginUrl = new URL("/login", url.origin);
     loginUrl.searchParams.set("error", oauthError);
@@ -26,6 +33,13 @@ export async function GET(request: NextRequest) {
   const supabase = await createClient();
   const { data: exchanged, error } = await supabase.auth.exchangeCodeForSession(code);
   if (error || !exchanged.user) {
+    console.error("[auth/callback] exchangeCodeForSession failed", {
+      origin: url.origin,
+      next: nextParam,
+      message: error?.message ?? null,
+      status: (error as { status?: number } | null)?.status ?? null,
+      name: error?.name ?? null,
+    });
     const loginUrl = new URL("/login", url.origin);
     loginUrl.searchParams.set("error", error?.message ?? "Sign-in failed");
     return NextResponse.redirect(loginUrl);
