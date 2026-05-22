@@ -25,6 +25,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (loading) return;
+
+    // Defence in depth: middleware auth-walls /app, but a statically
+    // prerendered shell can be served from the CDN without middleware
+    // running. Never render the app for an unauthenticated visitor.
+    if (!user) {
+      const next = pathname?.startsWith("/app") ? pathname : "/app";
+      router.replace(`/login?next=${encodeURIComponent(next)}`);
+      return;
+    }
+
     if (
       isAdminOnly(roles) &&
       pathname.startsWith("/app") &&
@@ -32,9 +42,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     ) {
       router.replace("/app/settings");
     }
-  }, [loading, roles, pathname, router]);
+  }, [loading, user, roles, pathname, router]);
 
-  if (loading) {
+  if (loading || !user) {
     return (
       <div className="min-h-screen grid place-items-center bg-background">
         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
